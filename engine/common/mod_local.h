@@ -152,13 +152,12 @@ model_t *Mod_ForName( const char *name, qboolean crash, qboolean trackCRC );
 qboolean Mod_ValidateCRC( const char *name, CRC32_t crc );
 void Mod_NeedCRC( const char *name, qboolean needCRC );
 void Mod_FreeUnused( void );
-model_t *Mod_Handle( int handle );
 
 //
 // mod_bmodel.c
 //
 void Mod_LoadBrushModel( model_t *mod, const void *buffer, qboolean *loaded );
-qboolean Mod_TestBmodelLumps( const char *name, const byte *mod_base, qboolean silent );
+qboolean Mod_TestBmodelLumps( file_t *f, const char *name, const byte *mod_base, qboolean silent, dlump_t *entities );
 qboolean Mod_HeadnodeVisible( mnode_t *node, const byte *visbits, int *lastleaf );
 int Mod_FatPVS( const vec3_t org, float radius, byte *visbuffer, int visbytes, qboolean merge, qboolean fullvis );
 qboolean Mod_BoxVisible( const vec3_t mins, const vec3_t maxs, const byte *visbits );
@@ -182,7 +181,6 @@ void Mod_ReleaseHullPolygons( void );
 //
 // mod_studio.c
 //
-
 void Mod_LoadStudioModel( model_t *mod, const void *buffer, qboolean *loaded );
 void Mod_UnloadStudioModel( model_t *mod );
 void Mod_InitStudioAPI( void );

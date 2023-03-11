@@ -6,6 +6,10 @@ APP=xash3d-fwgs
 APPDIR=$APP.AppDir
 APPIMAGE=$APP-$ARCH.AppImage
 
+DS=xashds-linux
+DSDIR=$DS-$ARCH
+DSTARGZ=$DS-$ARCH.tar.gz
+
 build_sdl2()
 {
 	cd "$BUILDDIR"/SDL2_src || die
@@ -46,9 +50,9 @@ build_engine()
 	fi
 
 	if [ "$1" = "dedicated" ]; then
-		./waf configure -T release -d -W $AMD64 || die
+		./waf configure -T release -d $AMD64 --enable-fs-tests || die_configure
 	elif [ "$1" = "full" ]; then
-		./waf configure --sdl2=SDL2_linux -T release --enable-stb --prefix="$APPDIR" -W $AMD64 --enable-utils || die
+		./waf configure --sdl2=SDL2_linux -T release --enable-stb $AMD64 --enable-utils --enable-fs-tests || die_confgure
 	else
 		die
 	fi
@@ -60,14 +64,11 @@ build_appimage()
 {
 	cd "$BUILDDIR" || die
 
-	./waf install || die
-
-	# Generate extras.pak
-	python3 scripts/makepak.py xash-extras/ "$APPDIR/extras.pak"
+	./waf install --destdir="$APPDIR" || die
 
 	cp SDL2_linux/lib/libSDL2-2.0.so.0 "$APPDIR/"
 	if [ "$ARCH" = "i386" ]; then
-		cp vgui-dev/lib/vgui.so "$APPDIR/"
+		cp 3rdparty/vgui_support/vgui-dev/lib/vgui.so "$APPDIR/"
 	fi
 
 	cat > "$APPDIR"/AppRun << 'EOF'
@@ -79,8 +80,7 @@ fi
 echo "Xash3D FWGS installed as AppImage."
 echo "Base directory is $XASH3D_BASEDIR. Set XASH3D_BASEDIR environment variable to override this"
 
-export XASH3D_EXTRAS_PAK1="${APPDIR}"/extras.pak
-export LD_LIBRARY_PATH="${APPDIR}":$LD_LIBRARY_PATH
+export XASH3D_EXTRAS_PAK1="${APPDIR}"/valve/extras.pk3
 ${DEBUGGER} "${APPDIR}"/xash3d "$@"
 exit $?
 EOF
@@ -104,11 +104,23 @@ EOF
 	./appimagetool.AppImage "$APPDIR" "$APPIMAGE"
 }
 
+build_dedicated_tarball()
+{
+	cd "$BUILDDIR" || die
+
+	./waf install --destdir=$DSDIR || die
+
+	tar -czvf $DSTARGZ $DSDIR
+}
+
+mkdir -p artifacts/
+
 rm -rf build # clean-up build directory
 build_engine dedicated
-mv build/engine/xash xashds-linux-$ARCH
+build_dedicated_tarball
+mv $DSTARGZ artifacts/
 
-rm -rf build
 build_sdl2
-build_engine full
+build_engine full # don't rebuild some common parts twice
 build_appimage
+mv $APPIMAGE artifacts/

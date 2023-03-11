@@ -178,15 +178,20 @@ static qboolean LoadMDL( const char *modelname )
 
 	if( destdir[0] != '\0' )
 	{
-		if( !IsFileExists( destdir ) )
+		if( !MakeDirectory( destdir ) )
 		{
-			fprintf( stderr, "ERROR: Couldn't find directory %s\n", destdir );
+			fprintf( stderr, "ERROR: Couldn't create directory %s\n", destdir );
 			return false;
 		}
 
 		COM_PathSlashFix( destdir );
 	}
 	else
+		COM_ExtractFilePath( modelname, destdir );
+
+	len -= ( sizeof( ".mdl" ) - 1 ); // path length without extension
+
+	if( !model_hdr->numtextures )
 	{
 		COM_ExtractFilePath( modelname, destdir );
 	}
@@ -225,7 +230,9 @@ static qboolean LoadMDL( const char *modelname )
 				return false;
 			}
 		}
-		else
+
+		if( memcmp( &texture_hdr->ident, id_mdlhdr, sizeof( id_mdlhdr ) )
+		    || !texture_hdr->numtextures )
 		{
 			texture_hdr = model_hdr;
 		}

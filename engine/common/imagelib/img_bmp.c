@@ -25,7 +25,7 @@ Image_LoadBMP
 qboolean Image_LoadBMP( const char *name, const byte *buffer, fs_offset_t filesize )
 {
 	byte	*buf_p, *pixbuf;
-	rgba_t	palette[256];
+	rgba_t	palette[256] = { 0 };
 	int	i, columns, column, rows, row, bpp = 1;
 	int	cbPalBytes = 0, padSize = 0, bps = 0;
 	int	reflectivity[3] = { 0, 0, 0 };
@@ -41,7 +41,7 @@ qboolean Image_LoadBMP( const char *name, const byte *buffer, fs_offset_t filesi
 
 	buf_p = (byte *)buffer;
 	memcpy( &bhdr, buf_p, sizeof( bmp_t ));
-	buf_p += sizeof( bmp_t );
+	buf_p += BI_FILE_HEADER_SIZE + bhdr.bitmapHeaderSize;
 
 	// bogus file header check
 	if( bhdr.reserved0 != 0 ) return false;
@@ -53,9 +53,9 @@ qboolean Image_LoadBMP( const char *name, const byte *buffer, fs_offset_t filesi
 		return false;
 	}
 
-	if( bhdr.bitmapHeaderSize != 0x28 )
+	if(!( bhdr.bitmapHeaderSize == 40 || bhdr.bitmapHeaderSize == 108 || bhdr.bitmapHeaderSize == 124 ))
 	{
-		Con_DPrintf( S_ERROR "Image_LoadBMP: invalid header size %i\n", bhdr.bitmapHeaderSize );
+		Con_DPrintf( S_ERROR "Image_LoadBMP: %s have non-standard header size %i\n", name, bhdr.bitmapHeaderSize );
 		return false;
 	}
 
@@ -69,8 +69,11 @@ qboolean Image_LoadBMP( const char *name, const byte *buffer, fs_offset_t filesi
 	// bogus compression?  Only non-compressed supported.
 	if( bhdr.compression != BI_RGB )
 	{
-		Con_DPrintf( S_ERROR "Image_LoadBMP: only uncompressed BMP files supported (%s)\n", name );
-		return false;
+		if( bhdr.bitsPerPixel != 32 || bhdr.compression != BI_BITFIELDS )
+		{ 
+			Con_DPrintf( S_ERROR "Image_LoadBMP: only uncompressed BMP files supported (%s)\n", name );
+			return false;
+		}
 	}
 
 	image.width = columns = bhdr.width;
@@ -174,7 +177,7 @@ qboolean Image_LoadBMP( const char *name, const byte *buffer, fs_offset_t filesi
 		break;
 	}
 
-	estimatedSize = ( buf_p - buffer ) + ( image.width + padSize ) * image.height * ( bhdr.bitsPerPixel >> 3 );
+	estimatedSize = ( buf_p - buffer ) + image.width * image.height * ( bhdr.bitsPerPixel >> 3 );
 	if( filesize < estimatedSize )
 	{
 		if( image.palette )
@@ -187,6 +190,7 @@ qboolean Image_LoadBMP( const char *name, const byte *buffer, fs_offset_t filesi
 		return false;
 	}
 
+	image.depth = 1;
 	image.size = image.width * image.height * bpp;
 	image.rgba = Mem_Malloc( host.imagepool, image.size );
 
@@ -313,8 +317,8 @@ qboolean Image_LoadBMP( const char *name, const byte *buffer, fs_offset_t filesi
 	}
 
 	VectorDivide( reflectivity, ( image.width * image.height ), image.fogParams );
-	if( image.palette ) Image_GetPaletteBMP( image.palette );
-	image.depth = 1;
+	if( image.palette )
+		Image_GetPaletteBMP( image.palette );
 
 	return true;
 }

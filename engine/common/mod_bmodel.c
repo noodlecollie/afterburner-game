@@ -136,6 +136,7 @@ typedef struct
 	int			lightmap_samples;	// samples per lightmap (1 or 3)
 	int			version;		// model version
 	qboolean			isworld;
+	qboolean			isbsp30ext;
 } dbspmodel_t;
 
 typedef struct
@@ -161,6 +162,7 @@ typedef struct
 #define LUMP_SAVESTATS	BIT( 0 )
 #define LUMP_TESTONLY	BIT( 1 )
 #define LUMP_SILENT		BIT( 2 )
+#define LUMP_BSP30EXT   BIT( 3 ) // extra marker for Mod_LoadLump
 
 typedef struct
 {
@@ -275,13 +277,12 @@ static void Mod_LoadLump( const byte *in, mlumpinfo_t *info, mlumpstat_t *stat, 
 		// always use alternate entrysize for BSP2
 		real_entrysize = info->entrysize32;
 	}
-	else if( info->lumpnumber == LUMP_CLIPNODES && version != Q1BSP_VERSION )
+	else if( version == HLBSP_VERSION && FBitSet( flags, LUMP_BSP30EXT ) && info->lumpnumber == LUMP_CLIPNODES )
 	{
-		// never run this check for BSP29 because Arguire QBSP 'broken' clipnodes!
-		if(( l->filelen % info->entrysize ) || ( l->filelen / info->entrysize ) >= MAX_MAP_CLIPNODES )
+		// if this map is bsp30ext, try to guess extended clipnodes
+		if((( l->filelen % info->entrysize ) || ( l->filelen / info->entrysize32 ) >= MAX_MAP_CLIPNODES_HLBSP ))
 		{
 			real_entrysize = info->entrysize32;
-			SetBits( flags, LUMP_SILENT ); // shut up warning
 		}
 	}
 
@@ -458,9 +459,9 @@ void Mod_PrintWorldStats_f( void )
 	Con_Printf( "Lighting: %s\n", FBitSet( w->flags, MODEL_COLORED_LIGHTING ) ? "colored" : "monochrome" );
 	Con_Printf( "World total leafs: %d\n", worldmodel->numleafs + 1 );
 	Con_Printf( "original name: ^1%s\n", worldmodel->name );
-	Con_Printf( "internal name: %s\n", (world.message[0]) ? va( "^2%s", world.message ) : "none" );
-	Con_Printf( "map compiler: %s\n", (world.compiler[0]) ? va( "^3%s", world.compiler ) : "unknown" );
-	Con_Printf( "map editor: %s\n", (world.generator[0]) ? va( "^2%s", world.generator ) : "unknown" );
+	Con_Printf( "internal name: ^2%s\n", world.message[0] ? world.message : "none" );
+	Con_Printf( "map compiler: ^3%s\n", world.compiler[0] ? world.compiler : "unknown" );
+	Con_Printf( "map editor: ^2%s\n", world.generator[0] ? world.generator : "unknown" );
 }
 
 /*
@@ -809,7 +810,7 @@ static void Mod_FindModelOrigin( const char *entities, const char *modelname, ve
 
 	pfile = (char *)entities;
 
-	while(( pfile = COM_ParseFile( pfile, token )) != NULL )
+	while(( pfile = COM_ParseFile( pfile, token, sizeof( token ))) != NULL )
 	{
 		if( token[0] != '{' )
 			Host_Error( "Mod_FindModelOrigin: found %s when expecting {\n", token );
@@ -820,14 +821,14 @@ static void Mod_FindModelOrigin( const char *entities, const char *modelname, ve
 		while( 1 )
 		{
 			// parse key
-			if(( pfile = COM_ParseFile( pfile, token )) == NULL )
+			if(( pfile = COM_ParseFile( pfile, token, sizeof( token ))) == NULL )
 				Host_Error( "Mod_FindModelOrigin: EOF without closing brace\n" );
 			if( token[0] == '}' ) break; // end of desc
 
 			Q_strncpy( keyname, token, sizeof( keyname ));
 
 			// parse value
-			if(( pfile = COM_ParseFile( pfile, token )) == NULL )
+			if(( pfile = COM_ParseFile( pfile, token, sizeof( token ))) == NULL )
 				Host_Error( "Mod_FindModelOrigin: EOF without closing brace\n" );
 
 			if( token[0] == '}' )
@@ -1044,6 +1045,8 @@ Fills in surf->texturemins[] and surf->extents[]
 */
 static void Mod_CalcSurfaceExtents( msurface_t *surf )
 {
+	// this place is VERY critical to precision
+	// keep it as float, don't use double, because it causes issues with lightmap
 	float		mins[2], maxs[2], val;
 	float		lmmins[2], lmmaxs[2];
 	int		bmins[2], bmaxs[2];
@@ -1073,14 +1076,14 @@ static void Mod_CalcSurfaceExtents( msurface_t *surf )
 
 		for( j = 0; j < 2; j++ )
 		{
-			val = DotProduct( v->position, surf->texinfo->vecs[j] ) + surf->texinfo->vecs[j][3];
+			val = DotProductPrecise( v->position, surf->texinfo->vecs[j] ) + surf->texinfo->vecs[j][3];
 			mins[j] = Q_min( val, mins[j] );
 			maxs[j] = Q_max( val, maxs[j] );
 		}
 
 		for( j = 0; j < 2; j++ )
 		{
-			val = DotProduct( v->position, info->lmvecs[j] ) + info->lmvecs[j][3];
+			val = DotProductPrecise( v->position, info->lmvecs[j] ) + info->lmvecs[j][3];
 			lmmins[j] = Q_min( val, lmmins[j] );
 			lmmaxs[j] = Q_max( val, lmmaxs[j] );
 		}
@@ -1703,7 +1706,7 @@ static void Mod_LoadEntities( dbspmodel_t *bmod )
 	bmod->wadlist.count = 0;
 
 	// parse all the wads for loading textures in right ordering
-	while(( pfile = COM_ParseFile( pfile, token )) != NULL )
+	while(( pfile = COM_ParseFile( pfile, token, sizeof( token ))) != NULL )
 	{
 		if( token[0] != '{' )
 			Host_Error( "Mod_LoadEntities: found %s when expecting {\n", token );
@@ -1711,14 +1714,14 @@ static void Mod_LoadEntities( dbspmodel_t *bmod )
 		while( 1 )
 		{
 			// parse key
-			if(( pfile = COM_ParseFile( pfile, token )) == NULL )
+			if(( pfile = COM_ParseFile( pfile, token, sizeof( token ))) == NULL )
 				Host_Error( "Mod_LoadEntities: EOF without closing brace\n" );
 			if( token[0] == '}' ) break; // end of desc
 
 			Q_strncpy( keyname, token, sizeof( keyname ));
 
 			// parse value
-			if(( pfile = COM_ParseFile( pfile, token )) == NULL )
+			if(( pfile = COM_ParseFile( pfile, token, sizeof( token ))) == NULL )
 				Host_Error( "Mod_LoadEntities: EOF without closing brace\n" );
 
 			if( token[0] == '}' )
@@ -2960,7 +2963,7 @@ static void Mod_LoadClipnodes( dbspmodel_t *bmod )
 
 	bmod->clipnodes_out = out = (dclipnode32_t *)Mem_Malloc( loadmodel->mempool, bmod->numclipnodes * sizeof( *out ));
 
-	if(( bmod->version == QBSP2_VERSION ) || ( bmod->version == HLBSP_VERSION && bmod->numclipnodes >= MAX_MAP_CLIPNODES ))
+	if(( bmod->version == QBSP2_VERSION ) || ( bmod->version == HLBSP_VERSION && bmod->isbsp30ext && bmod->numclipnodes >= MAX_MAP_CLIPNODES_HLBSP ))
 	{
 		dclipnode32_t	*in = bmod->clipnodes32;
 
@@ -3120,6 +3123,18 @@ static void Mod_LoadLighting( dbspmodel_t *bmod )
 
 /*
 =================
+Mod_LumpLooksLikeEntities
+
+=================
+*/
+static int Mod_LumpLooksLikeEntities( const char *lump, const size_t lumplen )
+{
+	// look for "classname" string
+	return Q_memmem( lump, lumplen, "\"classname\"", sizeof( "\"classname\"" ) - 1 ) != NULL ? 1 : 0;
+}
+
+/*
+=================
 Mod_LoadBmodelLumps
 
 loading and processing bmodel
@@ -3127,12 +3142,13 @@ loading and processing bmodel
 */
 qboolean Mod_LoadBmodelLumps( const byte *mod_base, qboolean isworld )
 {
-	dheader_t		*header = (dheader_t *)mod_base;
-	dextrahdr_t	*extrahdr = (dextrahdr_t *)((byte *)mod_base + sizeof( dheader_t ));
+	const dheader_t *header = (const dheader_t *)mod_base;
+	const dextrahdr_t	*extrahdr = (const dextrahdr_t *)(mod_base + sizeof( dheader_t ));
 	dbspmodel_t	*bmod = &srcmodel;
 	model_t		*mod = loadmodel;
 	char		wadvalue[2048];
-	int		i;
+	size_t		len = 0;
+	int		i, ret, flags = 0;
 
 	// always reset the intermediate struct
 	memset( bmod, 0, sizeof( dbspmodel_t ));
@@ -3150,10 +3166,27 @@ qboolean Mod_LoadBmodelLumps( const byte *mod_base, qboolean isworld )
 #endif
 	switch( header->version )
 	{
-	case Q1BSP_VERSION:
 	case HLBSP_VERSION:
+		if( extrahdr->id == IDEXTRAHEADER )
+		{
+			SetBits( flags, LUMP_BSP30EXT );
+		}
+		// only relevant for half-life maps
+		else if( !Mod_LumpLooksLikeEntities( mod_base + header->lumps[LUMP_ENTITIES].fileofs, header->lumps[LUMP_ENTITIES].filelen ) &&
+			 Mod_LumpLooksLikeEntities( mod_base + header->lumps[LUMP_PLANES].fileofs, header->lumps[LUMP_PLANES].filelen ))
+		{
+			// blue-shift swapped lumps
+			srclumps[0].lumpnumber = LUMP_PLANES;
+			srclumps[1].lumpnumber = LUMP_ENTITIES;
+			break;
+		}
+		// intended fallthrough
+	case Q1BSP_VERSION:
 	case QBSP2_VERSION:
 	case ABBSP_VERSION:
+		// everything else
+		srclumps[0].lumpnumber = LUMP_ENTITIES;
+		srclumps[1].lumpnumber = LUMP_PLANES;
 		break;
 	default:
 		Con_Printf( S_ERROR "%s has unrecognised version number %i\n", loadmodel->name, header->version );
@@ -3162,25 +3195,21 @@ qboolean Mod_LoadBmodelLumps( const byte *mod_base, qboolean isworld )
 	}
 
 	bmod->version = header->version;	// share up global
-	if( isworld ) world.flags = 0;	// clear world settings
-	bmod->isworld = isworld;
-
-	if( header->version == HLBSP_VERSION &&
-		header->lumps[LUMP_ENTITIES].fileofs <= 1024 &&
-		(header->lumps[LUMP_ENTITIES].filelen % sizeof( dplane_t )) == 0 )
+	if( isworld )
 	{
-		// blue-shift swapped lumps
-		srclumps[0].lumpnumber = LUMP_PLANES;
-		srclumps[1].lumpnumber = LUMP_ENTITIES;
+		world.flags = 0;	// clear world settings
+		SetBits( flags, LUMP_SAVESTATS|LUMP_SILENT );
 	}
+	bmod->isworld = isworld;
+	bmod->isbsp30ext = FBitSet( flags, LUMP_BSP30EXT );
 
 	// loading base lumps
 	for( i = 0; i < ARRAYSIZE( srclumps ); i++ )
-		Mod_LoadLump( mod_base, &srclumps[i], &worldstats[i], isworld ? (LUMP_SAVESTATS|LUMP_SILENT) : 0 );
+		Mod_LoadLump( mod_base, &srclumps[i], &worldstats[i], flags );
 
 	// loading extralumps
 	for( i = 0; i < ARRAYSIZE( extlumps ); i++ )
-		Mod_LoadLump( mod_base, &extlumps[i], &worldstats[ARRAYSIZE( srclumps ) + i], isworld ? (LUMP_SAVESTATS|LUMP_SILENT) : 0 );
+		Mod_LoadLump( mod_base, &extlumps[i], &worldstats[ARRAYSIZE( srclumps ) + i], flags );
 
 	if( !bmod->isworld && loadstat.numerrors )
 	{
@@ -3225,7 +3254,13 @@ qboolean Mod_LoadBmodelLumps( const byte *mod_base, qboolean isworld )
 	{
 		if( !bmod->wadlist.wadusage[i] )
 			continue;
-		Q_strncat( wadvalue, va( "%s.wad; ", bmod->wadlist.wadnames[i] ), sizeof( wadvalue ));
+		ret = Q_snprintf( &wadvalue[len], sizeof( wadvalue ), "%s.wad; ", bmod->wadlist.wadnames[i] );
+		if( ret == -1 )
+		{
+			Con_DPrintf( S_WARN "Too many wad files for output!\n" );
+			break;
+		}
+		len += ret;
 	}
 
 	if( COM_CheckString( wadvalue ))
@@ -3237,16 +3272,45 @@ qboolean Mod_LoadBmodelLumps( const byte *mod_base, qboolean isworld )
 	return true;
 }
 
+static int Mod_LumpLooksLikeEntitiesFile( file_t *f, const dlump_t *l, int flags, const char *msg )
+{
+	char *buf;
+	int ret;
+
+	if( FS_Seek( f, l->fileofs, SEEK_SET ) < 0 )
+	{
+		if( !FBitSet( flags, LUMP_SILENT ))
+			Con_DPrintf( S_ERROR "map ^2%s^7 %s lump past end of file\n", loadstat.name, msg );
+		return -1;
+	}
+
+	buf = Z_Malloc( l->filelen + 1 );
+	if( FS_Read( f, buf, l->filelen ) != l->filelen )
+	{
+		if( !FBitSet( flags, LUMP_SILENT ))
+			Con_DPrintf( S_ERROR "can't read %s lump of map ^2%s^7", msg, loadstat.name );
+		Z_Free( buf );
+		return -1;
+	}
+
+	ret = Mod_LumpLooksLikeEntities( buf, l->filelen );
+
+	Z_Free( buf );
+	return ret;
+}
+
 /*
 =================
 Mod_TestBmodelLumps
 
 check for possible errors
+return real entities lump (for bshift swapped lumps)
 =================
 */
-qboolean Mod_TestBmodelLumps( const char *name, const byte *mod_base, qboolean silent )
+qboolean Mod_TestBmodelLumps( file_t *f, const char *name, const byte *mod_base, qboolean silent, dlump_t *entities )
 {
-	dheader_t	*header = (dheader_t *)mod_base;
+	const dheader_t	*header = (const dheader_t *)mod_base;
+	const dextrahdr_t *extrahdr = (const dextrahdr_t *)( mod_base + sizeof( dheader_t ));
 	int	i, flags = LUMP_TESTONLY;
 
 	// always reset the intermediate struct
@@ -3254,7 +3318,8 @@ qboolean Mod_TestBmodelLumps( const char *name, const byte *mod_base, qboolean s
 
 	// store the name to correct show errors and warnings
 	Q_strncpy( loadstat.name, name, sizeof( loadstat.name ));
-	if( silent ) SetBits( flags, LUMP_SILENT );
+	if( silent )
+		SetBits( flags, LUMP_SILENT );
 
 #ifndef SUPPORT_BSP2_FORMAT
 	if( header->version == QBSP2_VERSION )
@@ -3264,12 +3329,43 @@ qboolean Mod_TestBmodelLumps( const char *name, const byte *mod_base, qboolean s
 		return false;
 	}
 #endif
+
 	switch( header->version )
 	{
-	case Q1BSP_VERSION:
 	case HLBSP_VERSION:
+		if( extrahdr->id == IDEXTRAHEADER )
+		{
+			SetBits( flags, LUMP_BSP30EXT );
+		}
+		else
+		{
+			// only relevant for half-life maps
+			int ret = Mod_LumpLooksLikeEntitiesFile( f, &header->lumps[LUMP_ENTITIES], flags, "entities" );
+			if( ret < 0 ) return false;
+			if( !ret )
+			{
+				ret = Mod_LumpLooksLikeEntitiesFile( f, &header->lumps[LUMP_PLANES], flags, "planes" );
+				if( ret < 0 ) return false;
+				if( ret )
+				{
+					// blue-shift swapped lumps
+					*entities = header->lumps[LUMP_PLANES];
+
+					srclumps[0].lumpnumber = LUMP_PLANES;
+					srclumps[1].lumpnumber = LUMP_ENTITIES;
+					break;
+				}
+			}
+		}
+		// intended fallthrough
+	case Q1BSP_VERSION:
 	case QBSP2_VERSION:
 	case ABBSP_VERSION:
+		// everything else
+		*entities = header->lumps[LUMP_ENTITIES];
+
+		srclumps[0].lumpnumber = LUMP_ENTITIES;
+		srclumps[1].lumpnumber = LUMP_PLANES;
 		break;
 	default:
 		// don't early out: let me analyze errors
@@ -3277,15 +3373,6 @@ qboolean Mod_TestBmodelLumps( const char *name, const byte *mod_base, qboolean s
 			Con_Printf( S_ERROR "%s has unrecognised version number %i\n", name, header->version );
 		loadstat.numerrors++;
 		break;
-	}
-
-	if( header->version == HLBSP_VERSION &&
-		header->lumps[LUMP_ENTITIES].fileofs <= 1024 &&
-		(header->lumps[LUMP_ENTITIES].filelen % sizeof( dplane_t )) == 0 )
-	{
-		// blue-shift swapped lumps
-		srclumps[0].lumpnumber = LUMP_PLANES;
-		srclumps[1].lumpnumber = LUMP_ENTITIES;
 	}
 
 	// loading base lumps

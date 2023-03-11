@@ -488,16 +488,13 @@ void CL_BatchResourceRequest( qboolean initialize )
 		switch( p->type )
 		{
 		case t_sound:
+		case t_model:
+		case t_eventscript:
 			if( !CL_CheckFile( &msg, p ))
 				break;
 			CL_MoveToOnHandList( p );
 			break;
 		case t_skin:
-			CL_MoveToOnHandList( p );
-			break;
-		case t_model:
-			if( !CL_CheckFile( &msg, p ))
-				break;
 			CL_MoveToOnHandList( p );
 			break;
 		case t_decal:
@@ -520,11 +517,6 @@ void CL_BatchResourceRequest( qboolean initialize )
 				Mem_Free( p );
 				break;
 			}
-			if( !CL_CheckFile( &msg, p ))
-				break;
-			CL_MoveToOnHandList( p );
-			break;
-		case t_eventscript:
 			if( !CL_CheckFile( &msg, p ))
 				break;
 			CL_MoveToOnHandList( p );
@@ -855,53 +847,73 @@ void CL_ParseFileTransferFailed( sizebuf_t *msg )
 CL_ParseServerData
 ==================
 */
-void CL_ParseServerData( sizebuf_t *msg )
+void CL_ParseServerData( sizebuf_t *msg, qboolean legacy )
 {
 	char	gamefolder[MAX_QPATH];
 	qboolean	background;
 	int	i;
 
-	Con_Reportf( "Serverdata packet received.\n" );
-	cls.timestart = Sys_DoubleTime();
+	Con_Reportf( "%s packet received.\n", legacy ? "Legacy serverdata" : "Serverdata" );
 
+	cls.timestart = Sys_DoubleTime();
 	cls.demowaiting = false;	// server is changed
 
 	// wipe the client_t struct
 	if( !cls.changelevel && !cls.changedemo )
 		CL_ClearState ();
+
+	// Re-init hud video, especially if we changed game directories
+	clgame.dllFuncs.pfnVidInit();
+
 	cls.state = ca_connected;
 
 	// parse protocol version number
 	i = MSG_ReadLong( msg );
 
-	if( i != PROTOCOL_VERSION )
-		Host_Error( "Server use invalid protocol (%i should be %i)\n", i, PROTOCOL_VERSION );
+	if( legacy )
+	{
+		if( i != PROTOCOL_LEGACY_VERSION )
+			Host_Error( "Server use invalid protocol (%i should be %i)\n", i, PROTOCOL_LEGACY_VERSION );
+	}
+	else
+	{
+		if( i != PROTOCOL_VERSION )
+			Host_Error( "Server use invalid protocol (%i should be %i)\n", i, PROTOCOL_VERSION );
+	}
 
 	cl.servercount = MSG_ReadLong( msg );
 	cl.checksum = MSG_ReadLong( msg );
 	cl.playernum = MSG_ReadByte( msg );
 	cl.maxclients = MSG_ReadByte( msg );
 	clgame.maxEntities = MSG_ReadWord( msg );
-	clgame.maxEntities = bound( MIN_EDICTS, clgame.maxEntities, MAX_EDICTS );
-	clgame.maxModels = MSG_ReadWord( msg );
-	Q_strncpy( clgame.mapname, MSG_ReadString( msg ), MAX_STRING );
-	Q_strncpy( clgame.maptitle, MSG_ReadString( msg ), MAX_STRING );
+	if( legacy )
+	{
+		clgame.maxEntities = bound( MIN_LEGACY_EDICTS, clgame.maxEntities, MAX_LEGACY_EDICTS );
+		clgame.maxModels = 512; // ???
+	}
+	else
+	{
+		clgame.maxEntities = bound( MIN_EDICTS, clgame.maxEntities, MAX_EDICTS );
+		clgame.maxModels = MSG_ReadWord( msg );
+	}
+	Q_strncpy( clgame.mapname, MSG_ReadString( msg ), sizeof( clgame.mapname ));
+	Q_strncpy( clgame.maptitle, MSG_ReadString( msg ), sizeof( clgame.maptitle ));
 	background = MSG_ReadOneBit( msg );
-	Q_strncpy( gamefolder, MSG_ReadString( msg ), MAX_QPATH );
+	Q_strncpy( gamefolder, MSG_ReadString( msg ), sizeof( gamefolder ));
 	host.features = (uint)MSG_ReadLong( msg );
 
-	// receive the player hulls
-	for( i = 0; i < MAX_MAP_HULLS * 3; i++ )
+	if( !legacy )
 	{
-		host.player_mins[i/3][i%3] = MSG_ReadChar( msg );
-		host.player_maxs[i/3][i%3] = MSG_ReadChar( msg );
+		// receive the player hulls
+		for( i = 0; i < MAX_MAP_HULLS * 3; i++ )
+		{
+			host.player_mins[i/3][i%3] = MSG_ReadChar( msg );
+			host.player_maxs[i/3][i%3] = MSG_ReadChar( msg );
+		}
 	}
 
 	if( clgame.maxModels > MAX_MODELS )
 		Con_Printf( S_WARN "server model limit is above client model limit %i > %i\n", clgame.maxModels, MAX_MODELS );
-
-	// Re-init hud video, especially if we changed game directories
-	clgame.dllFuncs.pfnVidInit();
 
 	if( Con_FixedFont( ))
 	{
@@ -926,11 +938,7 @@ void CL_ParseServerData( sizebuf_t *msg )
 
 	// set the background state
 	if( cls.demoplayback && ( cls.demonum != -1 ))
-	{
-		// re-init mouse
-		host.mouse_visible = false;
 		cl.background = true;
-	}
 	else cl.background = background;
 
 	if( cl.background )	// tell the game parts about background state
@@ -977,8 +985,11 @@ void CL_ParseServerData( sizebuf_t *msg )
 		COM_ClearCustomizationList( &cl.players[i].customdata, true );
 	CL_CreateCustomizationList();
 
-	// request resources from server
-	CL_ServerCommand( true, "sendres %i\n", cl.servercount );
+	if( !legacy )
+	{
+		// request resources from server
+		CL_ServerCommand( true, "sendres %i\n", cl.servercount );
+	}
 
 	memset( &clgame.movevars, 0, sizeof( clgame.movevars ));
 	memset( &clgame.oldmovevars, 0, sizeof( clgame.oldmovevars ));
@@ -1154,7 +1165,7 @@ void CL_ParseClientData( sizebuf_t *msg )
 CL_ParseBaseline
 ==================
 */
-void CL_ParseBaseline( sizebuf_t *msg )
+void CL_ParseBaseline( sizebuf_t *msg, qboolean legacy )
 {
 	int		i, newnum;
 	entity_state_t	nullstate;
@@ -1167,8 +1178,15 @@ void CL_ParseBaseline( sizebuf_t *msg )
 
 	while( 1 )
 	{
-		newnum = MSG_ReadUBitLong( msg, MAX_ENTITY_BITS );
-		if( newnum == LAST_EDICT ) break; // end of baselines
+		if( legacy )
+		{
+			newnum = MSG_ReadWord( msg );
+		}
+		else
+		{
+			newnum = MSG_ReadUBitLong( msg, MAX_ENTITY_BITS );
+			if( newnum == LAST_EDICT ) break; // end of baselines
+		}
 		player = CL_IsPlayerIndex( newnum );
 
 		if( newnum >= clgame.maxEntities )
@@ -1179,14 +1197,22 @@ void CL_ParseBaseline( sizebuf_t *msg )
 		ent->index = newnum;
 
 		MSG_ReadDeltaEntity( msg, &ent->prevstate, &ent->baseline, newnum, player, 1.0f );
+
+		if( legacy )
+		{
+			break; // only one baseline allowed in legacy protocol
+		}
 	}
 
-	cl.instanced_baseline_count = MSG_ReadUBitLong( msg, 6 );
-
-	for( i = 0; i < cl.instanced_baseline_count; i++ )
+	if( !legacy )
 	{
-		newnum = MSG_ReadUBitLong( msg, MAX_ENTITY_BITS );
-		MSG_ReadDeltaEntity( msg, &nullstate, &cl.instanced_baseline[i], newnum, false, 1.0f );
+		cl.instanced_baseline_count = MSG_ReadUBitLong( msg, 6 );
+
+		for( i = 0; i < cl.instanced_baseline_count; i++ )
+		{
+			newnum = MSG_ReadUBitLong( msg, MAX_ENTITY_BITS );
+			MSG_ReadDeltaEntity( msg, &nullstate, &cl.instanced_baseline[i], newnum, false, 1.0f );
+		}
 	}
 }
 
@@ -1329,36 +1355,12 @@ void CL_RegisterUserMessage( sizebuf_t *msg )
 
 /*
 ================
-CL_RegisterUserMessage
-
-register new user message or update existing
-================
-*/
-/*
-void CL_LegacyRegisterUserMessage( sizebuf_t *msg )
-{
-	char	*pszName;
-	int	svc_num, size;
-
-	svc_num = MSG_ReadByte( msg );
-	size = MSG_ReadByte( msg );
-	pszName = MSG_ReadString( msg );
-
-	// important stuff
-	if( size == 0xFF ) size = -1;
-	svc_num = bound( 0, svc_num, 255 );
-
-	CL_LinkUserMessage( pszName, svc_num, size );
-}
-*/
-/*
-================
 CL_UpdateUserinfo
 
 collect userinfo from all players
 ================
 */
-void CL_UpdateUserinfo( sizebuf_t *msg )
+void CL_UpdateUserinfo( sizebuf_t *msg, qboolean legacy )
 {
 	int		slot, id;
 	qboolean		active;
@@ -1369,7 +1371,8 @@ void CL_UpdateUserinfo( sizebuf_t *msg )
 	if( slot >= MAX_CLIENTS )
 		Host_Error( "CL_ParseServerMessage: svc_updateuserinfo >= MAX_CLIENTS\n" );
 
-	id = MSG_ReadLong( msg );	// unique user ID
+	if( !legacy )
+		id = MSG_ReadLong( msg );	// unique user ID
 	player = &cl.players[slot];
 	active = MSG_ReadOneBit( msg ) ? true : false;
 
@@ -1381,11 +1384,17 @@ void CL_UpdateUserinfo( sizebuf_t *msg )
 		player->topcolor = Q_atoi( Info_ValueForKey( player->userinfo, "topcolor" ));
 		player->bottomcolor = Q_atoi( Info_ValueForKey( player->userinfo, "bottomcolor" ));
 		player->spectator = Q_atoi( Info_ValueForKey( player->userinfo, "*hltv" ));
-		MSG_ReadBytes( msg, player->hashedcdkey, sizeof( player->hashedcdkey ));
+		if( !legacy )
+			MSG_ReadBytes( msg, player->hashedcdkey, sizeof( player->hashedcdkey ));
 
 		if( slot == cl.playernum ) memcpy( &gameui.playerinfo, player, sizeof( player_info_t ));
 	}
-	else memset( player, 0, sizeof( *player ));
+	else
+	{
+		COM_ClearCustomizationList( &player->customdata, true );
+
+		memset( player, 0, sizeof( *player ));
+	}
 }
 
 /*
@@ -1717,7 +1726,10 @@ CL_ParseVoiceInit
 */
 void CL_ParseVoiceInit( sizebuf_t *msg )
 {
-	// TODO: ???
+	char *pszCodec = MSG_ReadString( msg );
+	int quality = MSG_ReadByte( msg );
+
+	Voice_Init( pszCodec, quality );
 }
 
 /*
@@ -1728,7 +1740,31 @@ CL_ParseVoiceData
 */
 void CL_ParseVoiceData( sizebuf_t *msg )
 {
-	// TODO: ???
+	int size, idx, frames;
+	byte received[8192];
+
+	idx = MSG_ReadByte( msg ) + 1;
+
+	frames = MSG_ReadByte( msg );
+
+	size = MSG_ReadShort( msg );
+	size = Q_min( size, sizeof( received ));
+
+	MSG_ReadBytes( msg, received, size );
+
+	if ( idx <= 0 || idx > cl.maxclients )
+		return;
+
+	// must notify through as both local player and normal client
+	if( idx == cl.playernum + 1 )
+		Voice_StatusAck( &voice.local, VOICE_LOOPBACK_INDEX );
+
+	Voice_StatusAck( &voice.players_status[idx], idx );
+
+	if ( !size )
+		return;
+
+	Voice_AddIncomingData( idx, received, size, frames );
 }
 
 /*
@@ -1748,7 +1784,7 @@ void CL_ParseResLocation( sizebuf_t *msg )
 		return;
 	}
 
-	while( ( data = COM_ParseFile( data, token ) ) )
+	while( ( data = COM_ParseFile( data, token, sizeof( token ) ) ) )
 	{
 		Con_Reportf( "Adding %s as download location\n", token );
 
@@ -1824,7 +1860,7 @@ void CL_ParseScreenShake( sizebuf_t *msg )
 	clgame.shake.amplitude = (float)(word)MSG_ReadShort( msg ) * (1.0f / (float)(1<<12));
 	clgame.shake.duration = (float)(word)MSG_ReadShort( msg ) * (1.0f / (float)(1<<12));
 	clgame.shake.frequency = (float)(word)MSG_ReadShort( msg ) * (1.0f / (float)(1<<8));
-	clgame.shake.time = cl.time + max( clgame.shake.duration, 0.01f );
+	clgame.shake.time = cl.time + Q_max( clgame.shake.duration, 0.01f );
 	clgame.shake.next_shake = 0.0f; // apply immediately
 }
 
@@ -1844,7 +1880,7 @@ void CL_ParseScreenFade( sizebuf_t *msg )
 	duration = (float)MSG_ReadWord( msg );
 	holdTime = (float)MSG_ReadWord( msg );
 	sf->fadeFlags = MSG_ReadShort( msg );
-	flScale = ( sf->fadeFlags & FFADE_LONGFADE ) ? (1.0f / 256.0f) : (1.0f / 4096.0f);
+	flScale = FBitSet( sf->fadeFlags, FFADE_LONGFADE ) ? (1.0f / 256.0f) : (1.0f / 4096.0f);
 
 	sf->fader = MSG_ReadByte( msg );
 	sf->fadeg = MSG_ReadByte( msg );
@@ -1857,7 +1893,7 @@ void CL_ParseScreenFade( sizebuf_t *msg )
 	// calc fade speed
 	if( duration > 0 )
 	{
-		if( sf->fadeFlags & FFADE_OUT )
+		if( FBitSet( sf->fadeFlags, FFADE_OUT ))
 		{
 			if( sf->fadeEnd )
 			{
@@ -1865,6 +1901,7 @@ void CL_ParseScreenFade( sizebuf_t *msg )
 			}
 
 			sf->fadeEnd += cl.time;
+			sf->fadeTotalEnd = sf->fadeEnd;
 			sf->fadeReset += sf->fadeEnd;
 		}
 		else
@@ -1888,45 +1925,88 @@ Find the client cvar value
 and sent it back to the server
 ==============
 */
-void CL_ParseCvarValue( sizebuf_t *msg )
+void CL_ParseCvarValue( sizebuf_t *msg, const qboolean ext )
 {
-	const char *cvarName = MSG_ReadString( msg );
-	convar_t *cvar = Cvar_FindVar( cvarName );
+	const char *cvarName, *response;
+	convar_t *cvar;
+	int requestID;
 
-	// build the answer
-	MSG_BeginClientCmd( &cls.netchan.message, clc_requestcvarvalue );
-	MSG_WriteString( &cls.netchan.message, cvar ? cvar->string : "Not Found" );
+	if( ext )
+		requestID = MSG_ReadLong( msg );
+
+	cvarName = MSG_ReadString( msg );
+	cvar = Cvar_FindVar( cvarName );
+
+	if( cvar )
+	{
+		if( cvar->flags & FCVAR_PRIVILEGED )
+			response = "CVAR is privileged";
+		else if( cvar->flags & FCVAR_SERVER )
+			response = "CVAR is server-only";
+		else if( cvar->flags & FCVAR_PROTECTED )
+			response = "CVAR is protected";
+		else
+			response = cvar->string;
+	}
+	else response = "Bad CVAR request";
+
+	if( ext )
+	{
+		MSG_BeginClientCmd( &cls.netchan.message, clc_requestcvarvalue2 );
+		MSG_WriteLong( &cls.netchan.message, requestID );
+		MSG_WriteString( &cls.netchan.message, cvarName );
+	}
+	else
+	{
+		MSG_BeginClientCmd( &cls.netchan.message, clc_requestcvarvalue );
+	}
+	MSG_WriteString( &cls.netchan.message, response );
 }
 
 /*
 ==============
-CL_ParseCvarValue2
+CL_ParseExec
 
-Find the client cvar value
-and sent it back to the server
+Exec map/class specific configs
 ==============
 */
-void CL_ParseCvarValue2( sizebuf_t *msg )
+void CL_ParseExec( sizebuf_t *msg )
 {
-	int requestID = MSG_ReadLong( msg );
-	const char *cvarName = MSG_ReadString( msg );
-	convar_t *cvar = Cvar_FindVar( cvarName );
+	qboolean is_class;
+	int class_idx;
+	string mapname;
+	const char *class_cfgs[] = {
+		"",
+		"exec scout.cfg\n",
+		"exec sniper.cfg\n",
+		"exec soldier.cfg\n",
+		"exec demoman.cfg\n",
+		"exec medic.cfg\n",
+		"exec hwguy.cfg\n",
+		"exec pyro.cfg\n",
+		"exec spy.cfg\n",
+		"exec engineer.cfg\n",
+		"",
+		"exec civilian.cfg\n"
+	};
 
-	// build the answer
-	MSG_BeginClientCmd( &cls.netchan.message, clc_requestcvarvalue2 );
-	MSG_WriteLong( &cls.netchan.message, requestID );
-	MSG_WriteString( &cls.netchan.message, cvarName );
+	is_class = MSG_ReadByte( msg );
 
-	if( cvar )
+	if ( is_class )
 	{
-		// cheater can change value ignoring Cvar_Set so we responce incorrect value
-		if( cvar->value != Q_atof( cvar->string ))
-			MSG_WriteString( &cls.netchan.message, va( "%s (%g)", cvar->string, cvar->value ));
-		else MSG_WriteString( &cls.netchan.message, cvar->string );
+		class_idx = MSG_ReadByte( msg );
+
+		if ( class_idx >= 0 && class_idx <= 11 && !Q_stricmp( GI->gamefolder, "tfc" ) )
+			Cbuf_AddText( class_cfgs[class_idx] );
 	}
-	else
+	else if ( !Q_stricmp( GI->gamefolder, "tfc" ) )
 	{
-		MSG_WriteString( &cls.netchan.message, "Not Found" );
+		Cbuf_AddText( "exec mapdefault.cfg\n" );
+
+		COM_FileBase( clgame.mapname, mapname );
+
+		if ( COM_CheckString( mapname ) )
+			Cbuf_AddText( va( "exec %s.cfg\n", mapname ) );
 	}
 }
 
@@ -2184,24 +2264,24 @@ void CL_ParseServerMessage( sizebuf_t *msg, qboolean normal_message )
 		case svc_stufftext:
 			s = MSG_ReadString( msg );
 #ifdef HACKS_RELATED_HLMODS
-			// dsiable Cry Of Fear antisave protection
+			// disable Cry Of Fear antisave protection
 			if( !Q_strnicmp( s, "disconnect", 10 ) && cls.signon != SIGNONS )
 				break; // too early
 #endif
-			Cbuf_AddText( s );
+			Cbuf_AddFilteredText( s );
 			break;
 		case svc_setangle:
 			CL_ParseSetAngle( msg );
 			break;
 		case svc_serverdata:
 			Cbuf_Execute(); // make sure any stuffed commands are done
-			CL_ParseServerData( msg );
+			CL_ParseServerData( msg, false );
 			break;
 		case svc_lightstyle:
 			CL_ParseLightStyle( msg );
 			break;
 		case svc_updateuserinfo:
-			CL_UpdateUserinfo( msg );
+			CL_UpdateUserinfo( msg, false );
 			break;
 		case svc_deltatable:
 			Delta_ParseTableField( msg );
@@ -2231,7 +2311,7 @@ void CL_ParseServerMessage( sizebuf_t *msg, qboolean normal_message )
 			cl.frames[cl.parsecountmod].graphdata.event += MSG_GetNumBytesRead( msg ) - bufStart;
 			break;
 		case svc_spawnbaseline:
-			CL_ParseBaseline( msg );
+			CL_ParseBaseline( msg, false );
 			break;
 		case svc_temp_entity:
 			CL_ParseTempEntity( msg );
@@ -2329,15 +2409,19 @@ void CL_ParseServerMessage( sizebuf_t *msg, qboolean normal_message )
 			break;
 		case svc_voicedata:
 			CL_ParseVoiceData( msg );
+			cl.frames[cl.parsecountmod].graphdata.voicebytes += MSG_GetNumBytesRead( msg ) - bufStart;
 			break;
 		case svc_resourcelocation:
 			CL_ParseResLocation( msg );
 			break;
 		case svc_querycvarvalue:
-			CL_ParseCvarValue( msg );
+			CL_ParseCvarValue( msg, false );
 			break;
 		case svc_querycvarvalue2:
-			CL_ParseCvarValue2( msg );
+			CL_ParseCvarValue( msg, true );
+			break;
+		case svc_exec:
+			CL_ParseExec( msg );
 			break;
 		default:
 			CL_ParseUserMessage( msg, cmd );
@@ -2362,163 +2446,6 @@ void CL_ParseServerMessage( sizebuf_t *msg, qboolean normal_message )
 			CL_WriteDemoMessage( true, cls.starting_count, msg );
 		}
 	}
-}
-
-/*
-==================
-CL_ParseBaseline
-==================
-*/
-void CL_LegacyParseBaseline( sizebuf_t *msg )
-{
-	int		i, newnum;
-	entity_state_t	nullstate;
-	qboolean		player;
-	cl_entity_t	*ent;
-
-	Delta_InitClient ();	// finalize client delta's
-
-	memset( &nullstate, 0, sizeof( nullstate ));
-
-	newnum = MSG_ReadWord( msg );
-	player = CL_IsPlayerIndex( newnum );
-
-	if( newnum >= clgame.maxEntities )
-		Host_Error( "CL_AllocEdict: no free edicts\n" );
-
-	ent = CL_EDICT_NUM( newnum );
-	memset( &ent->prevstate, 0, sizeof( ent->prevstate ));
-	ent->index = newnum;
-
-	MSG_ReadDeltaEntity( msg, &ent->prevstate, &ent->baseline, newnum, player, 1.0f );
-
-}
-
-/*
-==================
-CL_ParseServerData
-==================
-*/
-void CL_ParseLegacyServerData( sizebuf_t *msg )
-{
-	string	gamefolder;
-	qboolean	background;
-	int	i;
-
-	Con_Reportf( "Legacy serverdata packet received.\n" );
-
-	cls.timestart = Sys_DoubleTime();
-
-	cls.demowaiting = false;	// server is changed
-	//clgame.load_sequence++;	// now all hud sprites are invalid
-
-	// wipe the client_t struct
-	if( !cls.changelevel && !cls.changedemo )
-		CL_ClearState ();
-	cls.state = ca_connected;
-
-	// parse protocol version number
-	i = MSG_ReadLong( msg );
-	//cls.serverProtocol = i;
-
-	if( i != 48 )
-		Host_Error( "Server uses invalid protocol (%i should be %i)\n", i, PROTOCOL_VERSION );
-
-	cl.servercount = MSG_ReadLong( msg );
-	cl.checksum = MSG_ReadLong( msg );
-	cl.playernum = MSG_ReadByte( msg );
-	cl.maxclients = MSG_ReadByte( msg );
-	clgame.maxEntities = MSG_ReadWord( msg );
-	clgame.maxEntities = bound( 30, clgame.maxEntities, 4096 );
-	clgame.maxModels = 512;
-	Q_strncpy( clgame.mapname, MSG_ReadString( msg ), MAX_STRING );
-	Q_strncpy( clgame.maptitle, MSG_ReadString( msg ), MAX_STRING );
-	background = MSG_ReadOneBit( msg );
-	Q_strncpy( gamefolder, MSG_ReadString( msg ), MAX_STRING );
-	host.features = (uint)MSG_ReadLong( msg );
-
-	// Re-init hud video, especially if we changed game directories
-	clgame.dllFuncs.pfnVidInit();
-
-	if( Con_FixedFont( ))
-	{
-		// seperate the printfs so the server message can have a color
-		Con_Print( "\n\35\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\37\n" );
-		Con_Print( va( "%c%s\n\n", 2, clgame.maptitle ));
-	}
-
-	// multiplayer game?
-	if( cl.maxclients > 1 )
-	{
-		// allow console in multiplayer games
-		host.allow_console = true;
-
-		// loading user settings
-		CSCR_LoadDefaultCVars( "user.scr" );
-
-		if( r_decals->value > mp_decals.value )
-			Cvar_SetValue( "r_decals", mp_decals.value );
-	}
-	else Cvar_Reset( "r_decals" );
-
-	// set the background state
-	if( cls.demoplayback && ( cls.demonum != -1 ))
-	{
-		// re-init mouse
-		host.mouse_visible = false;
-		cl.background = true;
-	}
-	else cl.background = background;
-
-	if( cl.background )	// tell the game parts about background state
-		Cvar_FullSet( "cl_background", "1", FCVAR_READ_ONLY );
-	else Cvar_FullSet( "cl_background", "0", FCVAR_READ_ONLY );
-
-	if( !cls.changelevel )
-	{
-		// continue playing if we are changing level
-		S_StopBackgroundTrack ();
-	}
-
-	if( !cls.changedemo )
-		UI_SetActiveMenu( cl.background );
-	else if( !cls.demoplayback )
-		Key_SetKeyDest( key_menu );
-
-	// don't reset cursor in background mode
-	if( cl.background )
-		IN_MouseRestorePos();
-
-	// will be changed later
-	cl.viewentity = cl.playernum + 1;
-	gameui.globals->maxClients = cl.maxclients;
-	Q_strncpy( gameui.globals->maptitle, clgame.maptitle, sizeof( gameui.globals->maptitle ));
-
-	if( !cls.changelevel && !cls.changedemo )
-		CL_InitEdicts (); // re-arrange edicts
-
-	// get splash name
-	if( cls.demoplayback && ( cls.demonum != -1 ))
-		Cvar_Set( "cl_levelshot_name", va( "levelshots/%s_%s", cls.demoname, refState.wideScreen ? "16x9" : "4x3" ));
-	else Cvar_Set( "cl_levelshot_name", va( "levelshots/%s_%s", clgame.mapname, refState.wideScreen ? "16x9" : "4x3" ));
-	Cvar_SetValue( "scr_loading", 0.0f ); // reset progress bar
-
-	if(( cl_allow_levelshots->value && !cls.changelevel ) || cl.background )
-	{
-		if( !FS_FileExists( va( "%s.bmp", cl_levelshot_name->string ), true ))
-			Cvar_Set( "cl_levelshot_name", "*black" ); // render a black screen
-		cls.scrshot_request = scrshot_plaque; // request levelshot even if exist (check filetime)
-	}
-
-	for( i = 0; i < MAX_CLIENTS; i++ )
-		COM_ClearCustomizationList( &cl.players[i].customdata, true );
-	CL_CreateCustomizationList();
-
-	memset( &clgame.movevars, 0, sizeof( clgame.movevars ));
-	memset( &clgame.oldmovevars, 0, sizeof( clgame.oldmovevars ));
-	memset( &clgame.centerPrint, 0, sizeof( clgame.centerPrint ));
-	cl.video_prepped = false;
-	cl.audio_prepped = false;
 }
 
 /*
@@ -2595,8 +2522,6 @@ void CL_LegacyParseStaticEntity( sizebuf_t *msg )
 
 	R_AddEfrags( ent );	// add link
 }
-
-
 
 void CL_LegacyParseSoundPacket( sizebuf_t *msg, qboolean is_ambient )
 {
@@ -2729,36 +2654,6 @@ void CL_LegacyPrecacheEvent( sizebuf_t *msg )
 	CL_SetEventIndex( cl.event_precache[eventIndex], eventIndex );
 }
 
-
-void CL_LegacyUpdateUserinfo( sizebuf_t *msg )
-{
-	int		slot, id = 0;
-	qboolean		active;
-	player_info_t	*player;
-
-	slot = MSG_ReadUBitLong( msg, MAX_CLIENT_BITS );
-
-	if( slot >= MAX_CLIENTS )
-		Host_Error( "CL_ParseServerMessage: svc_updateuserinfo >= MAX_CLIENTS\n" );
-
-	//id = MSG_ReadLong( msg );	// unique user ID
-	player = &cl.players[slot];
-	active = MSG_ReadOneBit( msg ) ? true : false;
-
-	if( active )
-	{
-		Q_strncpy( player->userinfo, MSG_ReadString( msg ), sizeof( player->userinfo ));
-		Q_strncpy( player->name, Info_ValueForKey( player->userinfo, "name" ), sizeof( player->name ));
-		Q_strncpy( player->model, Info_ValueForKey( player->userinfo, "model" ), sizeof( player->model ));
-		player->topcolor = Q_atoi( Info_ValueForKey( player->userinfo, "topcolor" ));
-		player->bottomcolor = Q_atoi( Info_ValueForKey( player->userinfo, "bottomcolor" ));
-		player->spectator = Q_atoi( Info_ValueForKey( player->userinfo, "*hltv" ));
-		//MSG_ReadBytes( msg, player->hashedcdkey, sizeof( player->hashedcdkey ));
-
-		if( slot == cl.playernum ) memcpy( &gameui.playerinfo, player, sizeof( player_info_t ));
-	}
-	else memset( player, 0, sizeof( *player ));
-}
 #if XASH_LOW_MEMORY == 0
 #define MAX_LEGACY_RESOURCES 2048
 #elif XASH_LOW_MEMORY == 2
@@ -2949,26 +2844,26 @@ void CL_ParseLegacyServerMessage( sizebuf_t *msg, qboolean normal_message )
 		case svc_stufftext:
 			s = MSG_ReadString( msg );
 #ifdef HACKS_RELATED_HLMODS
-			// dsiable Cry Of Fear antisave protection
+			// disable Cry Of Fear antisave protection
 			if( !Q_strnicmp( s, "disconnect", 10 ) && cls.signon != SIGNONS )
 				break; // too early
 #endif
 
 			Con_Reportf( "Stufftext: %s", s );
-			Cbuf_AddText( s );
+			Cbuf_AddFilteredText( s );
 			break;
 		case svc_setangle:
 			CL_ParseSetAngle( msg );
 			break;
 		case svc_serverdata:
 			Cbuf_Execute(); // make sure any stuffed commands are done
-			CL_ParseLegacyServerData( msg );
+			CL_ParseServerData( msg, true );
 			break;
 		case svc_lightstyle:
 			CL_ParseLightStyle( msg );
 			break;
 		case svc_updateuserinfo:
-			CL_LegacyUpdateUserinfo( msg );
+			CL_UpdateUserinfo( msg, true );
 			break;
 		case svc_deltatable:
 			Delta_ParseTableField( msg );
@@ -2998,7 +2893,7 @@ void CL_ParseLegacyServerMessage( sizebuf_t *msg, qboolean normal_message )
 			cl.frames[cl.parsecountmod].graphdata.event += MSG_GetNumBytesRead( msg ) - bufStart;
 			break;
 		case svc_spawnbaseline:
-			CL_LegacyParseBaseline( msg );
+			CL_ParseBaseline( msg, true );
 			break;
 		case svc_temp_entity:
 			CL_ParseTempEntity( msg );
@@ -3018,7 +2913,6 @@ void CL_ParseLegacyServerMessage( sizebuf_t *msg, qboolean normal_message )
 			break;
 		case svc_legacy_modelindex:
 			CL_LegacyPrecacheModel( msg );
-
 			break;
 		case svc_legacy_soundindex:
 			CL_LegacyPrecacheSound( msg );
@@ -3034,7 +2928,6 @@ void CL_ParseLegacyServerMessage( sizebuf_t *msg, qboolean normal_message )
 			CL_ParseRestore( msg );
 			break;
 		case svc_legacy_eventindex:
-			//CL_ParseFinaleCutscene( msg, 3 );
 			CL_LegacyPrecacheEvent(msg);
 			break;
 		case svc_weaponanim:
@@ -3111,20 +3004,14 @@ void CL_ParseLegacyServerMessage( sizebuf_t *msg, qboolean normal_message )
 		case svc_director:
 			CL_ParseDirector( msg );
 			break;
-		case svc_voiceinit:
-			CL_ParseVoiceInit( msg );
-			break;
-		case svc_voicedata:
-			CL_ParseVoiceData( msg );
-			break;
 		case svc_resourcelocation:
 			CL_ParseResLocation( msg );
 			break;
 		case svc_querycvarvalue:
-			CL_ParseCvarValue( msg );
+			CL_ParseCvarValue( msg, false );
 			break;
 		case svc_querycvarvalue2:
-			CL_ParseCvarValue2( msg );
+			CL_ParseCvarValue( msg, true );
 			break;
 		default:
 			CL_ParseUserMessage( msg, cmd );

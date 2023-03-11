@@ -13,6 +13,9 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 */
 
+#if defined( ALLOCA_H )
+#include ALLOCA_H
+#endif
 #include "common.h"
 #include "studio.h"
 #include "xash3d_mathlib.h"
@@ -429,37 +432,6 @@ uint LZSS_Decompress( const byte *pInput, byte *pOutput )
 	return totalBytes;
 }
 
-
-
-
-
-/*
-==============
-COM_IsSingleChar
-
-interpert this character as single
-==============
-*/
-static int COM_IsSingleChar( char c )
-{
-	if( c == '{' || c == '}' || c == '\'' || c == ',' )
-	{
-		return true;
-	}
-
-	if( !host.com_ignorebracket && ( c == ')' || c == '(' ))
-	{
-		return true;
-	}
-
-	if( host.com_handlecolon && c == ':' )
-	{
-		return true;
-	}
-
-	return false;
-}
-
 /*
 ==============
 COM_IsWhiteSpace
@@ -618,23 +590,6 @@ static char* COM_ParseFileInternal(char* data, char* token, size_t tokenLength, 
 }
 
 /*
-==============
-COM_ParseFile
-
-text parser
-==============
-*/
-char *COM_ParseFile( char *data, char *token )
-{
-	return COM_ParseFileInternal(data, token, 0, false);
-}
-
-char* COM_ParseFileSafe(char* data, char* token, size_t tokenLength)
-{
-	return COM_ParseFileInternal(data, token, tokenLength, true);
-}
-
-/*
 ================
 COM_ParseVector
 
@@ -654,14 +609,14 @@ qboolean COM_ParseVector( char **pfile, float *v, size_t size )
 
 	if( size == 1 )
 	{
-		*pfile = COM_ParseFile( *pfile, token );
+		*pfile = COM_ParseFile( *pfile, token, sizeof( token ));
 		v[0] = Q_atof( token );
 		return true;
 	}
 
 	saved = *pfile;
 
-	if(( *pfile = COM_ParseFile( *pfile, token )) == NULL )
+	if(( *pfile = COM_ParseFile( *pfile, token, sizeof( token ))) == NULL )
 		return false;
 
 	if( token[0] == '(' )
@@ -670,34 +625,19 @@ qboolean COM_ParseVector( char **pfile, float *v, size_t size )
 
 	for( i = 0; i < size; i++ )
 	{
-		*pfile = COM_ParseFile( *pfile, token );
+		*pfile = COM_ParseFile( *pfile, token, sizeof( token ));
 		v[i] = Q_atof( token );
 	}
 
 	if( !bracket ) return true;	// done
 
-	if(( *pfile = COM_ParseFile( *pfile, token )) == NULL )
+	if(( *pfile = COM_ParseFile( *pfile, token, sizeof( token ))) == NULL )
 		return false;
 
 	if( token[0] == ')' )
 		return true;
 	return false;
 }
-
-/*
-=============
-COM_CheckString
-
-=============
-*/
-#if 0
-int COM_CheckString( const char *string )
-{
-	if( !string || !*string )
-		return 0;
-	return 1;
-}
-#endif
 
 /*
 =============
@@ -785,23 +725,6 @@ void COM_TrimSpace( const char *source, char *dest )
 
 	// terminate the dest string
 	dest[length] = 0;
-}
-
-/*
-============
-COM_FixSlashes
-
-Changes all '/' characters into '\' characters, in place.
-============
-*/
-void COM_FixSlashes( char *pname )
-{
-	while( *pname )
-	{
-		if( *pname == '\\' )
-			*pname = '/';
-		pname++;
-	}
 }
 
 /*
@@ -1091,6 +1014,10 @@ pfnCvar_RegisterVariable
 */
 cvar_t *pfnCvar_RegisterClientVariable( const char *szName, const char *szValue, int flags )
 {
+	// a1ba: try to mitigate outdated client.dll vulnerabilities
+	if( !Q_stricmp( szName, "motdfile" ))
+		flags |= FCVAR_PRIVILEGED;
+
 	if( FBitSet( flags, FCVAR_GLCONFIG ))
 		return (cvar_t *)Cvar_Get( szName, szValue, flags, va( CVAR_GLCONFIG_DESCRIPTION, szName ));
 	return (cvar_t *)Cvar_Get( szName, szValue, flags|FCVAR_CLIENTDLL, Cvar_BuildAutoDescription( flags|FCVAR_CLIENTDLL ));
@@ -1367,3 +1294,35 @@ only exists in PlayStation version
 void GAME_EXPORT pfnResetTutorMessageDecayData( void )
 {
 }
+
+#if XASH_ENGINE_TESTS
+
+#include "tests.h"
+
+void Test_RunCommon( void )
+{
+	char *file = (char *)"q asdf \"qwerty\" \"f \\\"f\" meowmeow\n// comment \"stuff ignored\"\nbark";
+	int len;
+	char buf[5];
+
+	Msg( "Checking COM_ParseFile...\n" );
+
+	file = COM_ParseFileSafe( file, buf, sizeof( buf ), 0, &len, NULL );
+	TASSERT( !Q_strcmp( buf, "q" ) && len == 1);
+
+	file = COM_ParseFileSafe( file, buf, sizeof( buf ), 0, &len, NULL );
+	TASSERT( !Q_strcmp( buf, "asdf" ) && len == 4);
+
+	file = COM_ParseFileSafe( file, buf, sizeof( buf ), 0, &len, NULL );
+	TASSERT( !Q_strcmp( buf, "qwer" ) && len == -1);
+
+	file = COM_ParseFileSafe( file, buf, sizeof( buf ), 0, &len, NULL );
+	TASSERT( !Q_strcmp( buf, "f \"f" ) && len == 4);
+
+	file = COM_ParseFileSafe( file, buf, sizeof( buf ), 0, &len, NULL );
+	TASSERT( !Q_strcmp( buf, "meow" ) && len == -1);
+
+	file = COM_ParseFileSafe( file, buf, sizeof( buf ), 0, &len, NULL );
+	TASSERT( !Q_strcmp( buf, "bark" ) && len == 4);
+}
+#endif

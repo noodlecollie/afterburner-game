@@ -25,7 +25,7 @@ SV_ClientPrintf
 Sends text across to be displayed if the level passes
 =================
 */
-void SV_ClientPrintf( sv_client_t *cl, char *fmt, ... )
+void SV_ClientPrintf( sv_client_t *cl, const char *fmt, ... )
 {
 	char	string[MAX_SYSPATH];
 	va_list	argptr;
@@ -48,7 +48,7 @@ SV_BroadcastPrintf
 Sends text to all active clients
 =================
 */
-void SV_BroadcastPrintf( sv_client_t *ignore, char *fmt, ... )
+void SV_BroadcastPrintf( sv_client_t *ignore, const char *fmt, ... )
 {
 	char		string[MAX_SYSPATH];
 	va_list		argptr;
@@ -249,7 +249,7 @@ void SV_Maps_f( void )
 
 	if( Cmd_Argc() != 2 )
 	{
-		Msg( "Usage: maps <substring>\nmaps * for full listing\n" );
+		Msg( S_USAGE "maps <substring>\nmaps * for full listing\n" );
 		return;
 	}
 
@@ -265,7 +265,7 @@ void SV_Maps_f( void )
 
 	Mem_Free( mapList );
 
-	Msg( "%s\nDirectory: \"%s/maps\" - Maps listed: %d\n", separator, GI->basedir, nummaps );
+	Msg( "%s\nDirectory: \"%s/maps\" - Maps listed: %d\n", separator, GI->gamefolder, nummaps );
 }
 
 /*
@@ -439,18 +439,23 @@ SV_Save_f
 */
 void SV_Save_f( void )
 {
+	qboolean ret = false;
+
 	switch( Cmd_Argc( ))
 	{
 	case 1:
-		SV_SaveGame( "new" );
+		ret = SV_SaveGame( "new" );
 		break;
 	case 2:
-		SV_SaveGame( Cmd_Argv( 1 ));
+		ret = SV_SaveGame( Cmd_Argv( 1 ));
 		break;
 	default:
 		Con_Printf( S_USAGE "save <savename>\n" );
 		break;
 	}
+
+	if( ret && CL_Active() && !FBitSet( host.features, ENGINE_QUAKE_COMPATIBLE ))
+		CL_HudMessage( "GAMESAVED" ); // defined in titles.txt
 }
 
 /*
@@ -497,7 +502,8 @@ void SV_AutoSave_f( void )
 		return;
 	}
 
-	SV_SaveGame( "autosave" );
+	if( Cvar_VariableInteger( "sv_autosave" ) )
+		SV_SaveGame( "autosave" );
 }
 
 /*
@@ -681,7 +687,7 @@ void SV_Status_f( void )
 	for( i = 0, cl = svs.clients; i < svs.maxclients; i++, cl++ )
 	{
 		int	j, l;
-		char	*s;
+		const char	*s;
 
 		if( !cl->state ) continue;
 
@@ -763,7 +769,7 @@ void SV_ServerInfo_f( void )
 	{
 		Con_Printf( "Server info settings:\n" );
 		Info_Print( svs.serverinfo );
-		Con_Printf( "Total %i symbols\n", Q_strlen( svs.serverinfo ));
+		Con_Printf( "Total %lu symbols\n", Q_strlen( svs.serverinfo ));
 		return;
 	}
 
@@ -805,7 +811,7 @@ void SV_LocalInfo_f( void )
 	{
 		Con_Printf( "Local info settings:\n" );
 		Info_Print( svs.localinfo );
-		Con_Printf( "Total %i symbols\n", Q_strlen( svs.localinfo ));
+		Con_Printf( "Total %lu symbols\n", Q_strlen( svs.localinfo ));
 		return;
 	}
 
@@ -1002,19 +1008,19 @@ is available always
 */
 void SV_InitHostCommands( void )
 {
-	Cmd_AddCommand( "map", SV_Map_f, "start new level" );
+	Cmd_AddRestrictedCommand( "map", SV_Map_f, "start new level" );
 	Cmd_AddCommand( "maps", SV_Maps_f, "list maps" );
 
 	if( host.type == HOST_NORMAL )
 	{
-		Cmd_AddCommand( "newgame", SV_NewGame_f, "begin new game" );
-		Cmd_AddCommand( "hazardcourse", SV_HazardCourse_f, "starting a Hazard Course" );
-		Cmd_AddCommand( "map_background", SV_MapBackground_f, "set background map" );
-		Cmd_AddCommand( "load", SV_Load_f, "load a saved game file" );
-		Cmd_AddCommand( "loadquick", SV_QuickLoad_f, "load a quick-saved game file" );
-		Cmd_AddCommand( "reload", SV_Reload_f, "continue from latest save or restart level" );
-		Cmd_AddCommand( "killsave", SV_DeleteSave_f, "delete a saved game file and saveshot" );
-		Cmd_AddCommand( "nextmap", SV_NextMap_f, "load next level" );
+		Cmd_AddRestrictedCommand( "newgame", SV_NewGame_f, "begin new game" );
+		Cmd_AddRestrictedCommand( "hazardcourse", SV_HazardCourse_f, "starting a Hazard Course" );
+		Cmd_AddRestrictedCommand( "map_background", SV_MapBackground_f, "set background map" );
+		Cmd_AddRestrictedCommand( "load", SV_Load_f, "load a saved game file" );
+		Cmd_AddRestrictedCommand( "loadquick", SV_QuickLoad_f, "load a quick-saved game file" );
+		Cmd_AddRestrictedCommand( "reload", SV_Reload_f, "continue from latest save or restart level" );
+		Cmd_AddRestrictedCommand( "killsave", SV_DeleteSave_f, "delete a saved game file and saveshot" );
+		Cmd_AddRestrictedCommand( "nextmap", SV_NextMap_f, "load next level" );
 	}
 }
 
@@ -1041,6 +1047,8 @@ void SV_InitOperatorCommands( void )
 	Cmd_AddCommand( "changelevel", SV_ChangeLevel_f, "change level" );
 	Cmd_AddCommand( "changelevel2", SV_ChangeLevel2_f, "smooth change level" );
 	Cmd_AddCommand( "redirect", Rcon_Redirect_f, "force enable rcon redirection" );
+	Cmd_AddCommand( "logaddress", SV_SetLogAddress_f, "sets address and port for remote logging host" );
+	Cmd_AddCommand( "log", SV_ServerLog_f, "enables logging to file" );
 
 	if( host.type == HOST_NORMAL )
 	{
@@ -1075,6 +1083,8 @@ void SV_KillOperatorCommands( void )
 	Cmd_RemoveCommand( "shutdownserver" );
 	Cmd_RemoveCommand( "changelevel" );
 	Cmd_RemoveCommand( "changelevel2" );
+	Cmd_RemoveCommand( "logaddress" );
+	Cmd_RemoveCommand( "log" );
 
 	if( host.type == HOST_NORMAL )
 	{

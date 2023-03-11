@@ -113,10 +113,11 @@ typedef struct snd_format_s
 typedef struct
 {
 	snd_format_t	format;
-	int		samples;		// mono samples in buffer
-	int		samplepos;	// in mono samples
-	byte		*buffer;
+	int				samples;		// mono samples in buffer
+	int				samplepos;	// in mono samples
+	byte			*buffer;
 	qboolean		initialized;	// sound engine is active
+	const char		*backendName;
 } dma_t;
 
 #include "vox.h"
@@ -202,7 +203,7 @@ typedef struct
 
 #define MAX_DYNAMIC_CHANNELS	(60 + NUM_AMBIENTS)
 #define MAX_CHANNELS	(256 + MAX_DYNAMIC_CHANNELS)	// Scourge Of Armagon has too many static sounds on hip2m4.bsp
-#define MAX_RAW_CHANNELS	16
+#define MAX_RAW_CHANNELS	48
 #define MAX_RAW_SAMPLES	8192
 
 extern sound_t	ambient_sfx[NUM_AMBIENTS];
@@ -222,6 +223,7 @@ extern convar_t	*dsp_off;
 extern convar_t	s_test;		// cvar to testify new effects
 extern convar_t s_samplecount;
 extern convar_t snd_mute_losefocus;
+extern convar_t s_warn_late_precache;
 
 void S_InitScaletable( void );
 wavdata_t *S_LoadSound( sfx_t *sfx );
@@ -270,6 +272,7 @@ int S_GetCurrentStaticSounds( soundlist_t *pout, int size );
 int S_GetCurrentDynamicSounds( soundlist_t *pout, int size );
 sfx_t *S_GetSfxByHandle( sound_t handle );
 rawchan_t *S_FindRawChannel( int entnum, qboolean create );
+void S_RawEntSamples( int entnum, uint samples, uint rate, word width, word channels, const byte *data, int snd_vol );
 void S_RawSamples( uint samples, uint rate, word width, word channels, const byte *data, int entnum );
 void S_StopSound( int entnum, int channel, const char *soundname );
 void S_UpdateFrame( struct ref_viewpass_s *rvp );
@@ -282,9 +285,12 @@ void S_FreeSounds( void );
 // s_mouth.c
 //
 void SND_InitMouth( int entnum, int entchannel );
+void SND_ForceInitMouth( int entnum );
 void SND_MoveMouth8( channel_t *ch, wavdata_t *pSource, int count );
 void SND_MoveMouth16( channel_t *ch, wavdata_t *pSource, int count );
+void SND_MoveMouthRaw( rawchan_t *ch, portable_samplepair_t *pData, int count );
 void SND_CloseMouth( channel_t *ch );
+void SND_ForceCloseMouth( int entnum );
 
 //
 // s_stream.c
@@ -300,6 +306,7 @@ void S_FadeMusicVolume( float fadePercent );
 //
 int S_ZeroCrossingAfter( wavdata_t *pWaveData, int sample );
 int S_ZeroCrossingBefore( wavdata_t *pWaveData, int sample );
+int S_ConvertLoopedPosition( wavdata_t *pSource, int samplePosition, qboolean use_loop );
 int S_GetOutputData( wavdata_t *pSource, void **pData, int samplePosition, int sampleCount, qboolean use_loop );
 void S_SetSampleStart( channel_t *pChan, wavdata_t *pSource, int newPosition );
 void S_SetSampleEnd( channel_t *pChan, wavdata_t *pSource, int newEndPosition );

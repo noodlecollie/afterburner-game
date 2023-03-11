@@ -1,0 +1,95 @@
+name: Build & Deploy Engine
+on: [push, pull_request]
+jobs:
+#  cleanup:
+#    runs-on: self-hosted
+#    steps:
+#    - name: Cleanup
+#      run: rm -rf .* || true
+  build:
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-18.04
+            targetos: linux
+            targetarch: amd64
+          - os: ubuntu-18.04
+            targetos: linux
+            targetarch: i386
+#          - os: ubuntu-aarch64-20.04
+#            targetos: linux
+#            targetarch: aarch64
+
+#          - os: ubuntu-18.04
+#            targetos: android
+#            targetarch: 32
+#          - os: ubuntu-18.04
+#            targetos: android
+#            targetarch: 64
+
+#          - os: ubuntu-18.04
+#            targetos: motomagx
+#            targetarch: armv6
+
+          - os: ubuntu-20.04
+            targetos: nswitch
+            targetarch: arm64
+          - os: ubuntu-20.04
+            targetos: psvita
+            targetarch: armv7hf
+          - os: windows-latest
+            targetos: win32
+            targetarch: amd64
+          - os: windows-latest
+            targetos: win32
+            targetarch: i386
+    env:
+      SDL_VERSION: 2.26.2
+      GH_CPU_ARCH: ${{ matrix.targetarch }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      ANDROID_SDK_TOOLS_VER: 4333796
+      UPLOADTOOL_ISPRERELEASE: true
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    - name: Install dependencies
+      run: bash scripts/gha/deps_${{ matrix.targetos }}.sh
+    - name: Build engine
+      run: bash scripts/gha/build_${{ matrix.targetos }}.sh
+    - name: Upload engine (prereleases)
+      run: bash scripts/continious_upload.sh artifacts/*
+    - name: Upload engine (artifacts)
+      uses: actions/upload-artifact@v3
+      with:
+        name: artifact-${{ matrix.targetos }}-${{ matrix.targetarch }}
+        path: artifacts/*
+  flatpak:
+    name: "Flatpak"
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - app: su.xash.Engine.Compat.i386
+    container:
+      image: bilelmoussaoui/flatpak-github-actions:freedesktop-22.08
+      options: --privileged
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      UPLOADTOOL_ISPRERELEASE: true
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    - name: Build flatpak (Compat.i386)
+      uses: FWGS/flatpak-github-actions/flatpak-builder@v5
+      with:
+        bundle: ${{ matrix.app }}.flatpak
+        manifest-path: scripts/flatpak/${{ matrix.app }}.yml
+    - name: Upload engine (prereleases)
+      run: bash scripts/continious_upload.sh ${{ matrix.app }}.flatpak

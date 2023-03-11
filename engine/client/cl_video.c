@@ -104,7 +104,7 @@ void SCR_CheckStartupVids( void )
 
 	pfile = (char *)afile;
 
-	while(( pfile = COM_ParseFile( pfile, token )) != NULL )
+	while(( pfile = COM_ParseFile( pfile, token, sizeof( token ))) != NULL )
 	{
 		Q_strncpy( cls.movies[c], token, sizeof( cls.movies[0] ));
 
@@ -209,7 +209,7 @@ qboolean SCR_PlayCinematic( const char *arg )
 
 	if( FS_FileExists( arg, false ) && !fullpath )
 	{
-		Con_Printf( S_ERROR "Couldn't load %s from packfile. Please extract it\n", path );
+		Con_Printf( S_ERROR "Couldn't load %s from packfile. Please extract it\n", arg );
 		return false;
 	}
 

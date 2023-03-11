@@ -17,6 +17,9 @@ GNU General Public License for more details.
 #include "server.h"
 #include "net_encode.h"
 #include "library.h"
+#include "voice.h"
+#include "pm_local.h"
+
 #if XASH_LOW_MEMORY != 2
 int SV_UPDATE_BACKUP = SINGLEPLAYER_BACKUP;
 #endif
@@ -287,7 +290,7 @@ void SV_ReadResourceList( const char *filename )
 	Con_DPrintf( "Precaching from %s\n", filename );
 	Con_DPrintf( "----------------------------------\n" );
 
-	while(( pfile = COM_ParseFile( pfile, token )) != NULL )
+	while(( pfile = COM_ParseFile( pfile, token, sizeof( token ))) != NULL )
 	{
 		if( !COM_IsSafeFileToDownload( token ))
 			continue;
@@ -388,6 +391,18 @@ void SV_CreateResourceList( void )
 
 /*
 ================
+SV_WriteVoiceCodec
+================
+*/
+void SV_WriteVoiceCodec( sizebuf_t *msg )
+{
+	MSG_BeginServerCmd( msg, svc_voiceinit );
+	MSG_WriteString( msg, VOICE_DEFAULT_CODEC );
+	MSG_WriteByte( msg, (int)sv_voicequality.value );
+}
+
+/*
+================
 SV_CreateBaseline
 
 Entity baselines are used to compress the update messages
@@ -403,6 +418,8 @@ void SV_CreateBaseline( void )
 	int		playermodel;
 	int		delta_type;
 	int		entnum;
+
+	SV_WriteVoiceCodec( &sv.signon );
 
 	if( FBitSet( host.features, ENGINE_QUAKE_COMPATIBLE ))
 		playermodel = SV_ModelIndex( DEFAULT_PLAYER_PATH_QUAKE );
@@ -612,9 +629,6 @@ void SV_ActivateServer( int runPhysics )
 
 		if( COM_CheckString( cycle ))
 			Cbuf_AddText( va( "exec %s\n", cycle ));
-
-		if( public_server->value )
-			Master_Add( );
 	}
 }
 
@@ -638,7 +652,7 @@ void SV_DeactivateServer( void )
 
 	SV_FreeEdicts ();
 
-	SV_ClearPhysEnts ();
+	PM_ClearPhysEnts( svgame.pmove );
 
 	SV_EmptyStringPool();
 
@@ -668,8 +682,8 @@ qboolean SV_InitGame( void )
 {
 	string dllpath;
 
-	if( svs.initialized )
-		return true; // already initialized ?
+	if( svs.game_library_loaded )
+		return true;
 
 	// first initialize?
 	COM_ResetLibraryError();
@@ -683,8 +697,7 @@ qboolean SV_InitGame( void )
 	}
 
 	// client frames will be allocated in SV_ClientConnect
-	svs.initialized = true;
-
+	svs.game_library_loaded = true;
 	return true;
 }
 
@@ -762,7 +775,7 @@ void SV_SetupClients( void )
 	Con_Reportf( "%s alloced by server packet entities\n", Q_memprint( sizeof( entity_state_t ) * svs.num_client_entities ));
 
 	// init network stuff
-	NET_Config(( svs.maxclients > 1 ));
+	NET_Config(( svs.maxclients > 1 ), true );
 	svgame.numEntities = svs.maxclients + 1; // clients + world
 	ClearBits( sv_maxclients->flags, FCVAR_CHANGED );
 }
@@ -862,6 +875,10 @@ qboolean SV_SpawnServer( const char *mapname, const char *startspot, qboolean ba
 	if( !SV_InitGame( ))
 		return false;
 
+	// unlock sv_cheats in local game
+	ClearBits( sv_cheats.flags, FCVAR_READ_ONLY );
+
+	svs.initialized = true;
 	Log_Open();
 	Log_Printf( "Loading map \"%s\"\n", mapname );
 	Log_PrintServerVars();

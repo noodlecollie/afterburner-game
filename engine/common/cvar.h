@@ -18,8 +18,12 @@ GNU General Public License for more details.
 
 #include "cvardef.h"
 
+#ifdef XASH_64BIT
+#define CVAR_SENTINEL		0xDEADBEEFDEADBEEF
+#else
 #define CVAR_SENTINEL		0xDEADBEEF
-#define CVAR_CHECK_SENTINEL( cv )	((uint)(cv)->next == CVAR_SENTINEL)
+#endif
+#define CVAR_CHECK_SENTINEL( cv )	((uintptr_t)(cv)->next == CVAR_SENTINEL)
 
 // NOTE: if this is changed, it must be changed in cvardef.h too
 typedef struct convar_s
@@ -43,10 +47,11 @@ typedef struct convar_s
 #define FCVAR_ALLOCATED		(1<<19)	// this convar_t is fully dynamic allocated (include description)
 #define FCVAR_VIDRESTART		(1<<20)	// recreate the window is cvar with this flag was changed
 #define FCVAR_TEMPORARY		(1<<21)	// these cvars holds their values and can be unlink in any time
-#define FCVAR_LOCALONLY     (1<<22) // can be set only from local buffers
+#define FCVAR_MOVEVARS		(1<<22)	// this cvar is a part of movevars_t struct that shared between client and server
+#define FCVAR_USER_CREATED	(1<<23) // created by a set command (dll's used)
 
 #define CVAR_DEFINE( cv, cvname, cvstr, cvflags, cvdesc ) \
-	convar_t cv = { cvname, cvstr, cvflags, 0.0f, (void *)CVAR_SENTINEL, cvdesc, NULL }
+	convar_t cv = { (char*)cvname, (char*)cvstr, cvflags, 0.0f, (void *)CVAR_SENTINEL, (char*)cvdesc, NULL }
 
 #define CVAR_DEFINE_AUTO( cv, cvstr, cvflags, cvdesc ) \
 	CVAR_DEFINE( cv, #cv, cvstr, cvflags, cvdesc )
@@ -58,6 +63,7 @@ cvar_t *Cvar_GetList( void );
 convar_t *Cvar_FindVarExt( const char *var_name, int ignore_group );
 void Cvar_RegisterVariable( convar_t *var );
 convar_t *Cvar_Get( const char *var_name, const char *value, int flags, const char *description );
+convar_t *Cvar_Getf( const char *var_name, int flags, const char *description, const char *format, ... ) _format( 4 );
 void Cvar_LookupVars( int checkbit, void *buffer, void *ptr, setpair_t callback );
 void Cvar_FullSet( const char *var_name, const char *value, int flags );
 void Cvar_DirectSet( convar_t *var, const char *value );
@@ -71,8 +77,9 @@ void Cvar_WriteVariables( file_t *f, int group );
 qboolean Cvar_Exists( const char *var_name );
 void Cvar_Reset( const char *var_name );
 void Cvar_SetCheatState( void );
-qboolean Cvar_Command( convar_t *v );
+qboolean Cvar_CommandWithPrivilegeCheck( convar_t *v, qboolean isPrivileged );
 void Cvar_Init( void );
+void Cvar_PostFSInit( void );
 void Cvar_Unlink( int group );
 
 #endif//CVAR_H

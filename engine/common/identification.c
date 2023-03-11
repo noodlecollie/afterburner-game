@@ -445,8 +445,8 @@ int ID_ProcessWMIC( bloomfilter_t *value, const char *cmdline )
 
 	if( !ID_RunWMIC( buffer, cmdline ) )
 		return 0;
-	pbuf = COM_ParseFile( buffer, token ); // Header
-	while( pbuf = COM_ParseFile( pbuf, token ) )
+	pbuf = COM_ParseFile( buffer, token, sizeof( token )); // Header
+	while( pbuf = COM_ParseFile( pbuf, token, sizeof( token ) ) )
 	{
 		if( !ID_VerifyHEX( token ) )
 			continue;
@@ -465,8 +465,8 @@ int ID_CheckWMIC( bloomfilter_t value, const char *cmdline )
 
 	if( !ID_RunWMIC( buffer, cmdline ) )
 		return 0;
-	pbuf = COM_ParseFile( buffer, token ); // Header
-	while( pbuf = COM_ParseFile( pbuf, token ) )
+	pbuf = COM_ParseFile( buffer, token, sizeof( token )); // Header
+	while( pbuf = COM_ParseFile( pbuf, token, sizeof( token ) ) )
 	{
 		bloomfilter_t filter;
 
@@ -614,10 +614,10 @@ void ID_Init( void )
 	byte md5[16];
 	int i;
 
-	Cmd_AddCommand( "bloomfilter", ID_BloomFilter_f, "print bloomfilter raw value of arguments set");
-	Cmd_AddCommand( "verifyhex", ID_VerifyHEX_f, "check if id source seems to be fake" );
+	Cmd_AddRestrictedCommand( "bloomfilter", ID_BloomFilter_f, "print bloomfilter raw value of arguments set");
+	Cmd_AddRestrictedCommand( "verifyhex", ID_VerifyHEX_f, "check if id source seems to be fake" );
 #if XASH_LINUX
-	Cmd_AddCommand( "testcpuinfo", ID_TestCPUInfo_f, "try read cpu serial" );
+	Cmd_AddRestrictedCommand( "testcpuinfo", ID_TestCPUInfo_f, "try read cpu serial" );
 #endif
 
 #if XASH_ANDROID && !XASH_DEDICATED

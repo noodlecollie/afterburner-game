@@ -22,10 +22,8 @@ GNU General Public License for more details.
 #endif
 
 #include "build.h"
-
-#ifdef XASH_MSVC
-#pragma warning(disable : 4201)	// nonstandard extension used
-#endif
+#include "com_model.h"
+#include "studio.h"
 
 // euler angle order
 #define PITCH		0
@@ -33,18 +31,18 @@ GNU General Public License for more details.
 #define ROLL		2
 
 #ifndef M_PI
-#define M_PI		(float)3.14159265358979323846
+#define M_PI		(double)3.14159265358979323846
 #endif
 
 #ifndef M_PI2
-#define M_PI2		((float)(M_PI * 2))
+#define M_PI2		((double)(M_PI * 2))
 #endif
 
 #define M_PI_F		((float)(M_PI))
 #define M_PI2_F		((float)(M_PI2))
 
-#define RAD2DEG( x )	((float)(x) * (float)(180.f / M_PI_F))
-#define DEG2RAD( x )	((float)(x) * (float)(M_PI_F / 180.f))
+#define RAD2DEG( x )	((double)(x) * (double)(180.0 / M_PI))
+#define DEG2RAD( x )	((double)(x) * (double)(M_PI / 180.0))
 
 #define NUMVERTEXNORMALS	162
 
@@ -73,12 +71,16 @@ GNU General Public License for more details.
 
 #define Q_min( a, b )	(((a) < (b)) ? (a) : (b))
 #define Q_max( a, b )	(((a) > (b)) ? (a) : (b))
+#define Q_equal( a, b ) (((a) > ((b) - EQUAL_EPSILON)) && ((a) < ((b) + EQUAL_EPSILON)))
 #define Q_recip( a )	((float)(1.0f / (float)(a)))
 #define Q_floor( a )	((float)(int)(a))
 #define Q_ceil( a )		((float)(int)((a) + 1))
 #define Q_round( x, y )	(floor( x / y + 0.5f ) * y )
 #define Q_rint(x)		((x) < 0.0f ? ((int)((x)-0.5f)) : ((int)((x)+0.5f)))
 
+#ifdef XASH_IRIX
+#undef isnan
+#endif
 #ifdef isnan // check for C99 isnan
 #define IS_NAN isnan
 #else
@@ -91,6 +93,7 @@ GNU General Public License for more details.
 #define DotProduct(x,y) ((x)[0]*(y)[0]+(x)[1]*(y)[1]+(x)[2]*(y)[2])
 #define DotProductAbs(x,y) (abs((x)[0]*(y)[0])+abs((x)[1]*(y)[1])+abs((x)[2]*(y)[2]))
 #define DotProductFabs(x,y) (fabs((x)[0]*(y)[0])+fabs((x)[1]*(y)[1])+fabs((x)[2]*(y)[2]))
+#define DotProductPrecise(x,y) ((double)(x)[0]*(double)(y)[0]+(double)(x)[1]*(double)(y)[1]+(double)(x)[2]*(double)(y)[2])
 #define CrossProduct(a,b,c) ((c)[0]=(a)[1]*(b)[2]-(a)[2]*(b)[1],(c)[1]=(a)[2]*(b)[0]-(a)[0]*(b)[2],(c)[2]=(a)[0]*(b)[1]-(a)[1]*(b)[0])
 #define Vector2Subtract(a,b,c) ((c)[0]=(a)[0]-(b)[0],(c)[1]=(a)[1]-(b)[1])
 #define VectorSubtract(a,b,c) ((c)[0]=(a)[0]-(b)[0],(c)[1]=(a)[1]-(b)[1],(c)[2]=(a)[2]-(b)[2])
@@ -103,7 +106,7 @@ GNU General Public License for more details.
 #define VectorScale(in, scale, out) ((out)[0] = (in)[0] * (scale),(out)[1] = (in)[1] * (scale),(out)[2] = (in)[2] * (scale))
 #define VectorCompare(v1,v2)	((v1)[0]==(v2)[0] && (v1)[1]==(v2)[1] && (v1)[2]==(v2)[2])
 #define VectorDivide( in, d, out ) VectorScale( in, (1.0f / (d)), out )
-#define VectorMax(a) ( max((a)[0], max((a)[1], (a)[2])) )
+#define VectorMax(a) ( Q_max((a)[0], Q_max((a)[1], (a)[2])) )
 #define VectorAvg(a) ( ((a)[0] + (a)[1] + (a)[2]) / 3 )
 #define VectorLength(a) ( sqrt( DotProduct( a, a )))
 #define VectorLength2(a) (DotProduct( a, a ))
@@ -168,7 +171,7 @@ float ApproachVal( float target, float value, float speed );
 //
 // matrixlib.c
 //
-#define Matrix3x4_LoadIdentity( mat )		Matrix3x4_Copy( mat, matrix3x4_identity )
+#define Matrix3x4_LoadIdentity( mat )		Matrix3x4_Copy( mat, m_matrix3x4_identity )
 #define Matrix3x4_Copy( out, in )		memcpy( out, in, sizeof( matrix3x4 ))
 
 void Matrix3x4_VectorTransform( const matrix3x4 in, const float v[3], float out[3] );
@@ -186,7 +189,7 @@ void Matrix3x4_OriginFromMatrix( const matrix3x4 in, float *out );
 void Matrix3x4_AnglesFromMatrix( const matrix3x4 in, vec3_t out );
 void Matrix3x4_Transpose( matrix3x4 out, const matrix3x4 in1 );
 
-#define Matrix4x4_LoadIdentity( mat )	Matrix4x4_Copy( mat, matrix4x4_identity )
+#define Matrix4x4_LoadIdentity( mat )	Matrix4x4_Copy( mat, m_matrix4x4_identity )
 #define Matrix4x4_Copy( out, in )	memcpy( out, in, sizeof( matrix4x4 ))
 
 void Matrix4x4_VectorTransform( const matrix4x4 in, const float v[3], float out[3] );
@@ -208,6 +211,10 @@ qboolean Matrix4x4_Invert_Full( matrix4x4 out, const matrix4x4 in1 );
 float V_CalcFov( float *fov_x, float width, float height );
 void V_AdjustFov( float *fov_x, float *fov_y, float width, float height, qboolean lock_x );
 
+void R_StudioSlerpBones( int numbones, vec4_t q1[], float pos1[][3], const vec4_t q2[], const float pos2[][3], float s );
+void R_StudioCalcBoneQuaternion( int frame, float s, const mstudiobone_t *pbone, const mstudioanim_t *panim, const float *adj, vec4_t q );
+void R_StudioCalcBonePosition( int frame, float s, const mstudiobone_t *pbone, const mstudioanim_t *panim, const vec3_t adj, vec3_t pos );
+
 int BoxOnPlaneSide( const vec3_t emins, const vec3_t emaxs, const mplane_t *p );
 #define BOX_ON_PLANE_SIDE( emins, emaxs, p )			\
 	((( p )->type < 3 ) ?				\
@@ -227,8 +234,8 @@ int BoxOnPlaneSide( const vec3_t emins, const vec3_t emaxs, const mplane_t *p );
 
 extern vec3_t		vec3_origin;
 extern int		boxpnt[6][4];
-extern const matrix3x4	matrix3x4_identity;
-extern const matrix4x4	matrix4x4_identity;
+extern const matrix3x4	m_matrix3x4_identity;
+extern const matrix4x4	m_matrix4x4_identity;
 extern const float		m_bytenormals[NUMVERTEXNORMALS][3];
 
 #endif // XASH3D_MATHLIB_H

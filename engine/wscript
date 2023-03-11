@@ -49,6 +49,9 @@ def options(opt):
 	grp.add_option('--enable-engine-tests', action = 'store_true', dest = 'ENGINE_TESTS', default = False,
 		help = 'embed tests into the engine, jump into them by -runtests command line switch [default: %default]')
 
+	grp.add_option('--enable-engine-fuzz', action = 'store_true', dest = 'ENGINE_FUZZ', default = False,
+		help = 'add LLVM libFuzzer [default: %default]' )
+
 	opt.load('sdl2')
 
 def configure(conf):
@@ -62,9 +65,30 @@ def configure(conf):
 		conf.options.NO_ASYNC_RESOLVE = True
 		if not conf.check_cc( fragment='int main(){ int i = socket();}', lib = 'wattcpwl', mandatory=False ):
 			conf.define('XASH_NO_NETWORK',1)
-	elif conf.env.DEST_OS == 'android': # Android doesn't need SDL2
-		for i in ['log']:
-			conf.check_cc(lib = i)
+	elif conf.env.DEST_OS == 'nswitch':
+		# re-enable undefined reference errors
+		conf.env.CXXFLAGS += ['-Wl,--no-undefined']
+		conf.env.CFLAGS += ['-Wl,--no-undefined']
+		# allow the SDL2 sanity check to complete properly by linking in libstdc++ and lm normally
+		conf.env.LDFLAGS += ['-lstdc++', '-lm']
+		conf.load('sdl2')
+		if not conf.env.HAVE_SDL2:
+			conf.fatal('SDL2 not availiable! Install switch-sdl2!')
+		conf.define('XASH_SDL', 2)
+		# then remove them to avoid them getting linked to shared objects
+		conf.env.LDFLAGS.remove('-lstdc++')
+		conf.env.LDFLAGS.remove('-lm')
+	elif conf.env.DEST_OS == 'psvita':
+		# allow the SDL2 sanity check to complete properly by linking in some deps missing from the pkg-config file
+		extra_libs = ['-lstdc++', '-lm', '-lSceShaccCgExt', '-lSceShaccCg_stub', '-ltaihen_stub', '-lSceKernelDmacMgr_stub']
+		conf.env.LDFLAGS += extra_libs
+		conf.load('sdl2')
+		if not conf.env.HAVE_SDL2:
+			conf.fatal('SDL2 not availiable! Install switch-sdl2!')
+		conf.define('XASH_SDL', 2)
+		# then remove them to avoid them getting linked to shared objects
+		for lib in extra_libs:
+			conf.env.LDFLAGS.remove(lib)
 	elif conf.options.FBDEV_SW:
 		# unused, XASH_LINUX without XASH_SDL gives fbdev & alsa support
 		# conf.define('XASH_FBDEV', 1)
@@ -79,7 +103,7 @@ def configure(conf):
 	else:
 		conf.load('sdl2')
 		if not conf.env.HAVE_SDL2:
-			conf.fatal('SDL2 not availiable! If you want to build dedicated server, specify --dedicated')
+			conf.fatal('SDL2 not available! If you want to build dedicated server, specify --dedicated')
 		conf.define('XASH_SDL', 2)
 
 	if conf.env.DEST_OS == 'haiku':
@@ -104,6 +128,10 @@ def configure(conf):
 
 	conf.env.ENGINE_TESTS = conf.options.ENGINE_TESTS
 
+	if conf.options.ENGINE_FUZZ:
+		conf.env.append_unique('CFLAGS', '-fsanitize=fuzzer-no-link')
+		conf.env.append_unique('LINKFLAGS', '-fsanitize=fuzzer')
+
 	conf.define_cond('XASH_ENGINE_TESTS', conf.env.ENGINE_TESTS)
 	conf.define_cond('XASH_STATIC_LIBS', conf.env.STATIC_LINKING)
 	conf.define_cond('XASH_CUSTOM_SWAP', conf.options.CUSTOM_SWAP)
@@ -119,8 +147,11 @@ def configure(conf):
 def build(bld):
 	bld.add_post_fun(copySDL2)
 
+	# public includes for renderers and utils use
+	bld(name = 'engine_includes', export_includes = '. common common/imagelib', use = 'filesystem_includes')
+
 	is_cxx_link = False
-	libs = [ 'public', 'dllemu' ]
+	libs = [ 'engine_includes', 'public', 'dllemu' ]
 
 	# basic build: dedicated only
 	source = bld.path.ant_glob([
@@ -137,7 +168,7 @@ def build(bld):
 	if bld.env.DEST_OS == 'win32':
 		libs += ['USER32', 'SHELL32', 'GDI32', 'ADVAPI32', 'DBGHELP', 'PSAPI', 'WS2_32' ]
 		source += bld.path.ant_glob(['platform/win32/*.c'])
-	elif bld.env.DEST_OS != 'dos': #posix
+	elif bld.env.DEST_OS not in ['dos', 'nswitch', 'psvita']: #posix
 		libs += [ 'M', 'RT', 'PTHREAD', 'ASOUND']
 		if not bld.env.STATIC:
 			libs += ['DL']
@@ -145,6 +176,9 @@ def build(bld):
 
 	if bld.env.DEST_OS == 'linux':
 		source += bld.path.ant_glob(['platform/linux/*.c'])
+
+	if bld.env.DEST_OS == 'irix':
+		source += bld.path.ant_glob(['platform/irix/*.c'])
 
 	if bld.env.DEST_OS == 'dos':
 		source += bld.path.ant_glob(['platform/dos/*.c'])
@@ -173,43 +207,79 @@ def build(bld):
 		libs += ['LOG']
 		source += bld.path.ant_glob(['platform/android/*.cpp', 'platform/android/*.c', 'platform/linux/*.c'])
 
+	if bld.env.DEST_OS == 'nswitch':
+		libs += [ 'SOLDER' ]
+		source += bld.path.ant_glob(['platform/posix/*.c'])
+		source += bld.path.ant_glob(['platform/nswitch/*.c'])
+		# HACK: link in the entirety of libstdc++ so that dynamic libs could use all of it without manual exporting
+		# we can't do this right away because std::filesystem will complain about not having pathconf(),
+		# which we have defined in sys_nswitch.c
+		bld.env.LDFLAGS += ['-Wl,--whole-archive', '-lstdc++', '-Wl,--no-whole-archive', '-lm']
+
+	if bld.env.DEST_OS == 'psvita':
+		libs += [ 'VRTLD' ]
+		source += bld.path.ant_glob(['platform/posix/*.c'])
+		source += bld.path.ant_glob(['platform/psvita/*.c'])
+		# HACK: link in the entirety of libstdc++ so that dynamic libs could use all of it without manual exporting
+		# also link in all the funky dependencies that aren't in SDL2's LDFLAGS
+		bld.env.LDFLAGS += [
+			'-Wl,--whole-archive',
+			'-lstdc++',
+			'-lpthread',
+			'-Wl,--no-whole-archive',
+			'-lm',
+			'-lSceShaccCgExt',
+			'-lkubridge_stub',
+			'-ltaihen_stub',
+			'-lSceShaccCg_stub',
+			'-lSceKernelModulemgr_stub',
+			'-lSceSblSsMgr_stub',
+			'-lSceVshBridge_stub',
+			'-lSceKernelDmacMgr_stub'
+		]
+
 	# add client files
 	if not bld.env.DEDICATED:
 		source += bld.path.ant_glob([
 			'client/*.c',
 			'client/vgui/*.c',
 			'client/avi/*.c'])
+		libs += ['opus']
 
-	includes = \
-	[
-		'common',
-		'common/bsp/generic',
-		'common/imagelib',
-		'server',
-		'client',
-		'client/vgui',
-		'tests',
-		'.',
-		'../public',
-		'../common',
-		'../pm_shared'
-	]
+	includes = ['server', 'client', 'client/vgui' ]
 
-	if bld.env.SINGLE_BINARY:
-		install_path = bld.env.BINDIR
-		program = 'cxxprogram' if is_cxx_link else 'cprogram'
-		if bld.env.STATIC:
-			program += '_static'
-		features = ['c', program]
+	# Switch and PSVita have custom parameters
+	if bld.env.DEST_OS in ['nswitch', 'psvita']:
+		bld(source = source,
+			target = 'xash',
+			features = 'c cxxprogram',
+			includes = includes,
+			use = libs,
+			install_path = None,
+			nro_install_path = bld.env.BINDIR,
+			nacp = 'platform/nswitch/xash3d-fwgs.nacp',
+			icon = 'platform/nswitch/icon.jpg',
+			sce_sys = 'platform/psvita/sce_sys',
+			title_id = 'XASH10000',
+			app_name = 'xash3d-fwgs'
+		)
 	else:
-		install_path = bld.env.LIBDIR
-		features = ['c', 'cxxshlib' if is_cxx_link else 'cshlib']
+		if bld.env.SINGLE_BINARY:
+			install_path = bld.env.BINDIR
+			program = 'cxxprogram' if is_cxx_link else 'cprogram'
+			if bld.env.STATIC:
+				program += '_static'
+			features = ['c', program]
+		else:
+			install_path = bld.env.LIBDIR
+			features = ['c', 'cxxshlib' if is_cxx_link else 'cshlib']
 
-	bld(source   = source,
-		target   = 'xash' if not bld.env.DEDICATED else "bond",
-		features = features,
-		includes = includes,
-		use      = libs,
-		install_path = install_path,
-		subsystem = bld.env.MSVC_SUBSYSTEM
-	)
+		bld(source   = source,
+			target   = 'xash',
+			features = features,
+			includes = includes,
+			use      = libs,
+			install_path = install_path,
+			subsystem = bld.env.MSVC_SUBSYSTEM,
+			rpath = '$ORIGIN',
+		)

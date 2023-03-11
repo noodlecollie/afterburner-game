@@ -48,7 +48,7 @@ writes into struct by offsets not names
 void Sys_Sleep( int msec );
 double Sys_DoubleTime( void );
 char *Sys_GetClipboardData( void );
-char *Sys_GetCurrentUser( void );
+const char *Sys_GetCurrentUser( void );
 int Sys_CheckParm( const char *parm );
 void Sys_Warn( const char *format, ... ) _format( 1 );
 void Sys_Error( const char *error, ... ) _format( 1 );
@@ -59,7 +59,7 @@ void Sys_ParseCommandLine( int argc, char **argv );
 void Sys_MergeCommandLine( void );
 void Sys_SetupCrashHandler( void );
 void Sys_RestoreCrashHandler( void );
-void Sys_SetClipboardData( const char *buffer, size_t size );
+void Sys_DebugBreak( void );
 #define Sys_GetParmFromCmdLine( parm, out ) _Sys_GetParmFromCmdLine( parm, out, sizeof( out ))
 qboolean _Sys_GetParmFromCmdLine( const char *parm, char *out, size_t size );
 qboolean Sys_GetIntFromCmdLine( const char *parm, int *out );
@@ -69,6 +69,7 @@ void Sys_PrintLog( const char *pMsg );
 void Sys_InitLog( void );
 void Sys_CloseLog( void );
 void Sys_Quit( void ) NORETURN;
+qboolean Sys_NewInstance( const char *gamedir );
 
 //
 // sys_con.c
@@ -89,10 +90,9 @@ void Wcon_ShowConsole( qboolean show );
 void Wcon_CreateConsole( void );
 void Wcon_DestroyConsole( void );
 void Wcon_DisableInput( void );
-void Wcon_Clear( void );
 char *Wcon_Input( void );
 void Wcon_WinPrint( const char *pMsg );
-void Wcon_RegisterHotkeys( void );
+void Wcon_SetStatus( const char *pStatus );
 #endif
 
 // text messages

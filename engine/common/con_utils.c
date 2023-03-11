@@ -80,8 +80,9 @@ int Cmd_ListMaps( search_t *t, char *lastmapname, size_t len )
 
 		if( f )
 		{
-			dheader_t		*header;
+			dheader_t *header;
 			dextrahdr_t	*hdrext;
+			dlump_t entities;
 
 			memset( buf, 0, sizeof( buf ));
 			FS_Read( f, buf, sizeof( buf ));
@@ -89,10 +90,10 @@ int Cmd_ListMaps( search_t *t, char *lastmapname, size_t len )
 			ver = header->version;
 
 			// check all the lumps and some other errors
-			if( Mod_TestBmodelLumps( t->filenames[i], buf, true ))
+			if( Mod_TestBmodelLumps( f, t->filenames[i], buf, true, &entities ))
 			{
-				lumpofs = header->lumps[LUMP_ENTITIES].fileofs;
-				lumplen = header->lumps[LUMP_ENTITIES].filelen;
+				lumpofs = entities.fileofs;
+				lumplen = entities.filelen;
 				ver = header->version;
 			}
 
@@ -120,24 +121,24 @@ int Cmd_ListMaps( search_t *t, char *lastmapname, size_t len )
 				message[0] = 0; // remove 'error'
 				pfile = ents;
 
-				while(( pfile = COM_ParseFile( pfile, token )) != NULL )
+				while(( pfile = COM_ParseFile( pfile, token, sizeof( token ))) != NULL )
 				{
 					if( !Q_strcmp( token, "{" )) continue;
 					else if( !Q_strcmp( token, "}" )) break;
 					else if( !Q_strcmp( token, "message" ))
 					{
 						// get the message contents
-						pfile = COM_ParseFile( pfile, message );
+						pfile = COM_ParseFile( pfile, message, sizeof( message ));
 					}
 					else if( !Q_strcmp( token, "compiler" ) || !Q_strcmp( token, "_compiler" ))
 					{
 						// get the message contents
-						pfile = COM_ParseFile( pfile, compiler );
+						pfile = COM_ParseFile( pfile, compiler, sizeof( compiler ));
 					}
 					else if( !Q_strcmp( token, "generator" ) || !Q_strcmp( token, "_generator" ))
 					{
 						// get the message contents
-						pfile = COM_ParseFile( pfile, generator );
+						pfile = COM_ParseFile( pfile, generator, sizeof( generator ));
 					}
 				}
 				Mem_Free( ents );
@@ -371,7 +372,7 @@ qboolean Cmd_GetSavesList( const char *s, char *completedname, int length )
 	string		matchbuf;
 	int		i, numsaves;
 
-	t = FS_Search( va( "%s%s*.sav", DEFAULT_SAVE_DIRECTORY, s ), true, true );	// lookup only in gamedir
+	t = FS_Search( va( DEFAULT_SAVE_DIRECTORY "%s*.sav", s ), true, true );	// lookup only in gamedir
 	if( !t ) return false;
 
 	COM_FileBase( t->filenames[0], matchbuf );
@@ -764,10 +765,10 @@ qboolean Cmd_GetGamesList( const char *s, char *completedname, int length )
 	// compare gamelist with current keyword
 	len = Q_strlen( s );
 
-	for( i = 0, numgamedirs = 0; i < SI.numgames; i++ )
+	for( i = 0, numgamedirs = 0; i < FI->numgames; i++ )
 	{
-		if(( *s == '*' ) || !Q_strnicmp( SI.games[i]->gamefolder, s, len))
-			Q_strcpy( gamedirs[numgamedirs++], SI.games[i]->gamefolder );
+		if(( *s == '*' ) || !Q_strnicmp( FI->games[i]->gamefolder, s, len))
+			Q_strcpy( gamedirs[numgamedirs++], FI->games[i]->gamefolder );
 	}
 
 	if( !numgamedirs ) return false;
@@ -907,21 +908,22 @@ qboolean Cmd_CheckMapsList_R( qboolean fRefresh, qboolean onlyingamedir )
 		{
 			int	num_spawnpoints = 0;
 			dheader_t	*header;
+			dlump_t entities;
 
 			memset( buf, 0, MAX_SYSPATH );
 			FS_Read( f, buf, MAX_SYSPATH );
 			header = (dheader_t *)buf;
 
 			// check all the lumps and some other errors
-			if( !Mod_TestBmodelLumps( t->filenames[i], buf, true ))
+			if( !Mod_TestBmodelLumps( f, t->filenames[i], buf, true, &entities ))
 			{
 				FS_Close( f );
 				continue;
 			}
 
 			// after call Mod_TestBmodelLumps we gurantee what map is valid
-			lumpofs = header->lumps[LUMP_ENTITIES].fileofs;
-			lumplen = header->lumps[LUMP_ENTITIES].filelen;
+			lumpofs = entities.fileofs;
+			lumplen = entities.filelen;
 
 			Q_strncpy( entfilename, t->filenames[i], sizeof( entfilename ));
 			COM_StripExtension( entfilename );
@@ -945,18 +947,18 @@ qboolean Cmd_CheckMapsList_R( qboolean fRefresh, qboolean onlyingamedir )
 				Q_strncpy( message, "No Title", MAX_STRING );
 				pfile = ents;
 
-				while(( pfile = COM_ParseFile( pfile, token )) != NULL )
+				while(( pfile = COM_ParseFile( pfile, token, sizeof( token ))) != NULL )
 				{
 					if( token[0] == '}' && worldspawn )
 						worldspawn = false;
 					else if( !Q_strcmp( token, "message" ) && worldspawn )
 					{
 						// get the message contents
-						pfile = COM_ParseFile( pfile, message );
+						pfile = COM_ParseFile( pfile, message, sizeof( message ));
 					}
 					else if( !Q_strcmp( token, "classname" ))
 					{
-						pfile = COM_ParseFile( pfile, token );
+						pfile = COM_ParseFile( pfile, token, sizeof( token ));
 						if( !Q_strcmp( token, GI->mp_entity ) || use_filter )
 							num_spawnpoints++;
 					}
@@ -1219,7 +1221,7 @@ void Con_CompleteCommand( field_t *field )
 
 	if( con.matchCount == 1 )
 	{
-		Q_sprintf( con.completionField->buffer, "\\%s", con.cmds[0] );
+		Q_strncpy( con.completionField->buffer, con.cmds[0], sizeof( con.completionField->buffer ));
 		if( Cmd_Argc() == 1 ) Q_strncat( con.completionField->buffer, " ", sizeof( con.completionField->buffer ) );
 		else Con_ConcatRemaining( temp.buffer, con.completionString );
 		con.completionField->cursor = Q_strlen( con.completionField->buffer );
@@ -1247,7 +1249,7 @@ void Con_CompleteCommand( field_t *field )
 		con.shortestMatch[len] = 0;
 
 		// multiple matches, complete to shortest
-		Q_sprintf( con.completionField->buffer, "\\%s", con.shortestMatch );
+		Q_strncpy( con.completionField->buffer, con.shortestMatch, sizeof( con.completionField->buffer ));
 		con.completionField->cursor = Q_strlen( con.completionField->buffer );
 		Con_ConcatRemaining( temp.buffer, con.completionString );
 
@@ -1327,8 +1329,9 @@ static void Cmd_WriteHelp(const char *name, const char *unused, const char *desc
 {
 	int	length;
 
-	if( !desc || !Q_strcmp( desc, "" ))
+	if( !COM_CheckString( desc ))
 		return; // ignore fantom cmds
+
 	if( name[0] == '+' || name[0] == '-' )
 		return; // key bindings
 
@@ -1357,7 +1360,6 @@ void Host_FinalizeConfig( file_t *f, const char *config )
 	FS_Close( f );
 	FS_Delete( backup );
 	FS_Rename( config, backup );
-	FS_Delete( config );
 	FS_Rename( newcfg, config );
 }
 

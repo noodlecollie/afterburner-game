@@ -332,6 +332,7 @@ __pycache__
 *.code-workspace
 .history/*
 .cache/*
+enc_temp_folder/
 
 # I always thought these were Mercurial files, but it turns out Meld creates them.
 *.orig

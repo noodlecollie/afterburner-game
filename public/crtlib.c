@@ -21,6 +21,7 @@ GNU General Public License for more details.
 #include <time.h>
 #include "stdio.h"
 #include "crtlib.h"
+#include "xash3d_mathlib.h"
 
 void Q_strnupr( const char *in, char *out, size_t size_out )
 {
@@ -60,21 +61,14 @@ qboolean Q_isdigit( const char *str )
 	return false;
 }
 
-size_t Q_strlen( const char *string )
+qboolean Q_isspace( const char *str )
 {
-	size_t		len;
-	const char	*p;
-
-	if( !string ) return 0;
-
-	len = 0;
-	p = string;
-	while( *p )
+	if( str && *str )
 	{
-		p++;
-		len++;
+		while( isspace( *str ) ) str++;
+		if( !*str ) return true;
 	}
-	return len;
+	return false;
 }
 
 size_t Q_colorstr( const char *string )
@@ -323,94 +317,6 @@ void Q_atov( float *vec, const char *str, size_t siz )
 	}
 }
 
-char *Q_strchr( const char *s, char c )
-{
-	size_t	len = Q_strlen( s );
-
-	while( len-- )
-	{
-		if( *++s == c )
-			return (char *)s;
-	}
-	return 0;
-}
-
-char *Q_strrchr( const char *s, char c )
-{
-	size_t	len = Q_strlen( s );
-
-	s += len;
-
-	while( len-- )
-	{
-		if( *--s == c )
-			return (char *)s;
-	}
-	return 0;
-}
-
-int Q_strnicmp( const char *s1, const char *s2, int n )
-{
-	int	c1, c2;
-
-	if( s1 == NULL )
-	{
-		if( s2 == NULL )
-			return 0;
-		else return -1;
-	}
-	else if( s2 == NULL )
-	{
-		return 1;
-	}
-
-	do {
-		c1 = *s1++;
-		c2 = *s2++;
-
-		if( !n-- ) return 0; // strings are equal until end point
-
-		if( c1 != c2 )
-		{
-			if( c1 >= 'a' && c1 <= 'z' ) c1 -= ('a' - 'A');
-			if( c2 >= 'a' && c2 <= 'z' ) c2 -= ('a' - 'A');
-			if( c1 != c2 ) return c1 < c2 ? -1 : 1;
-		}
-	} while( c1 );
-
-	// strings are equal
-	return 0;
-}
-
-int Q_strncmp( const char *s1, const char *s2, int n )
-{
-	int	c1, c2;
-
-	if( s1 == NULL )
-	{
-		if( s2 == NULL )
-			return 0;
-		else return -1;
-	}
-	else if( s2 == NULL )
-	{
-		return 1;
-	}
-
-	do {
-		c1 = *s1++;
-		c2 = *s2++;
-
-		// strings are equal until end point
-		if( !n-- ) return 0;
-		if( c1 != c2 ) return c1 < c2 ? -1 : 1;
-
-	} while( c1 );
-
-	// strings are equal
-	return 0;
-}
-
 static qboolean Q_starcmp( const char *pattern, const char *text )
 {
 	char		c, c1;
@@ -432,12 +338,15 @@ static qboolean Q_starcmp( const char *pattern, const char *text )
 	}
 }
 
-qboolean Q_stricmpext( const char *pattern, const char *text )
+qboolean Q_strnicmpext( const char *pattern, const char *text, size_t minimumlength )
 {
+	size_t  i = 0;
 	char	c;
 
 	while(( c = *pattern++ ) != '\0' )
 	{
+		i++;
+
 		switch( c )
 		{
 		case '?':
@@ -455,7 +364,32 @@ qboolean Q_stricmpext( const char *pattern, const char *text )
 				return false;
 		}
 	}
-	return ( *text == '\0' );
+	return ( *text == '\0' ) || i == minimumlength;
+}
+
+qboolean Q_stricmpext( const char *pattern, const char *text )
+{
+	return Q_strnicmpext( pattern, text, ~((size_t)0) );
+}
+
+const byte *Q_memmem( const byte *haystack, size_t haystacklen, const byte *needle, size_t needlelen )
+{
+	const byte *i;
+
+	// quickly find first matching symbol
+	while( haystacklen && ( i = memchr( haystack, needle[0], haystacklen )))
+	{
+		if( !memcmp( i, needle, needlelen ))
+			return i;
+
+		// skip one byte
+		i++;
+
+		haystacklen -= i - haystack;
+		haystack = i;
+	}
+
+	return NULL;
 }
 
 const char* Q_timestamp( int format )
@@ -502,31 +436,7 @@ const char* Q_timestamp( int format )
 	return timestamp;
 }
 
-char *Q_strstr( const char *string, const char *string2 )
-{
-	int	c;
-	size_t	len;
-
-	if( !string || !string2 ) return NULL;
-
-	c = *string2;
-	len = Q_strlen( string2 );
-
-	while( string )
-	{
-		for( ; *string && *string != c; string++ );
-
-		if( *string )
-		{
-			if( !Q_strncmp( string, string2, len ))
-				break;
-			string++;
-		}
-		else return NULL;
-	}
-	return (char *)string;
-}
-
+#if !defined( HAVE_STRCASESTR )
 char *Q_stristr( const char *string, const char *string2 )
 {
 	int	c;
@@ -551,6 +461,7 @@ char *Q_stristr( const char *string, const char *string2 )
 	}
 	return (char *)string;
 }
+#endif // !defined( HAVE_STRCASESTR )
 
 int Q_vsnprintf( char *buffer, size_t buffersize, const char *format, va_list args )
 {
@@ -605,20 +516,15 @@ int Q_sprintf( char *buffer, const char *format, ... )
 	return result;
 }
 
-char *Q_strpbrk(const char *s, const char *accept)
+void COM_StripColors( const char *in, char *out )
 {
-	for( ; *s; s++ )
+	while ( *in )
 	{
-		const char *k;
-
-		for( k = accept; *k; k++ )
-		{
-			if( *s == *k )
-				return (char*)s;
-		}
+		if ( IsColorString( in ) )
+			in += 2;
+		else *out++ = *in++;
 	}
-
-	return NULL;
+	*out = '\0';
 }
 
 uint Q_hashkey( const char *string, uint hashSize, qboolean caseinsensitive )
@@ -658,17 +564,17 @@ char *Q_pretifymem( float value, int digitsafterdecimal )
 	if( value > onemb )
 	{
 		value /= onemb;
-		Q_sprintf( suffix, " Mb" );
+		Q_strcpy( suffix, " Mb" );
 	}
 	else if( value > onekb )
 	{
 		value /= onekb;
-		Q_sprintf( suffix, " Kb" );
+		Q_strcpy( suffix, " Kb" );
 	}
-	else Q_sprintf( suffix, " bytes" );
+	else Q_strcpy( suffix, " bytes" );
 
 	// clamp to >= 0
-	digitsafterdecimal = max( digitsafterdecimal, 0 );
+	digitsafterdecimal = Q_max( digitsafterdecimal, 0 );
 
 	// if it's basically integral, don't do any decimals
 	if( fabs( value - (int)value ) < 0.00001f )
@@ -689,8 +595,8 @@ char *Q_pretifymem( float value, int digitsafterdecimal )
 	o = out;
 
 	// search for decimal or if it was integral, find the space after the raw number
-	dot = Q_strstr( i, "." );
-	if( !dot ) dot = Q_strstr( i, " " );
+	dot = Q_strchr( i, '.' );
+	if( !dot ) dot = Q_strchr( i, ' ' );
 
 	pos = dot - i;	// compute position of dot
 	pos -= 3;		// don't put a comma if it's <= 3 long
@@ -725,7 +631,7 @@ of all text functions.
 char *va( const char *format, ... )
 {
 	va_list		argptr;
-	static char	string[16][1024], *s;
+	static char	string[16][MAX_VA_STRING], *s;
 	static int	stringindex = 0;
 
 	s = string[stringindex];
@@ -848,7 +754,7 @@ void COM_ExtractFilePath( const char *path, char *dest )
 		memcpy( dest, path, src - path );
 		dest[src - path - 1] = 0; // cutoff backslash
 	}
-	else Q_strcpy( dest, "" ); // file without path
+	else dest[0] = 0; // file without path
 }
 
 /*
@@ -883,10 +789,12 @@ COM_DefaultExtension
 void COM_DefaultExtension( char *path, const char *extension )
 {
 	const char	*src;
+	size_t		 len;
 
 	// if path doesn't have a .EXT, append extension
 	// (extension should include the .)
-	src = path + Q_strlen( path ) - 1;
+	len = Q_strlen( path );
+	src = path + len - 1;
 
 	while( *src != '/' && src != path )
 	{
@@ -895,7 +803,7 @@ void COM_DefaultExtension( char *path, const char *extension )
 		src--;
 	}
 
-	Q_strcat( path, extension );
+	Q_strcpy( &path[len], extension );
 }
 
 /*
@@ -922,6 +830,22 @@ void COM_RemoveLineFeed( char *str )
 			*str = '\0';
 
 		++str;
+	}
+}
+
+/*
+============
+COM_FixSlashes
+
+Changes all '\' characters into '/' characters, in place.
+============
+*/
+void COM_FixSlashes( char *pname )
+{
+	for( ; *pname; pname++ )
+	{
+		if( *pname == '\\' )
+			*pname = '/';
 	}
 }
 
@@ -965,6 +889,165 @@ void COM_Hex2String( uint8_t hex, char *str )
 	*str++ = COM_Hex2Char( hex >> 4 );
 	*str++ = COM_Hex2Char( hex & 0x0F );
 	*str = '\0';
+}
+
+/*
+==============
+COM_IsSingleChar
+
+interpert this character as single
+==============
+*/
+static int COM_IsSingleChar( unsigned int flags, char c )
+{
+	if( c == '{' || c == '}' || c == '\'' || c == ',' )
+		return true;
+
+	if( !FBitSet( flags, PFILE_IGNOREBRACKET ) && ( c == ')' || c == '(' ))
+		return true;
+
+	if( FBitSet( flags, PFILE_HANDLECOLON ) && c == ':' )
+		return true;
+
+	return false;
+}
+
+/*
+==============
+COM_ParseFile
+
+text parser
+==============
+*/
+char *COM_ParseFileSafe( char *data, char *token, const int size, unsigned int flags, int *plen, qboolean *quoted )
+{
+	int	c, len = 0;
+	qboolean overflow = false;
+
+	if( quoted )
+		*quoted = false;
+
+	if( !token || !size )
+	{
+		if( plen ) *plen = 0;
+		return NULL;
+	}
+
+	token[0] = 0;
+
+	if( !data )
+		return NULL;
+// skip whitespace
+skipwhite:
+	while(( c = ((byte)*data)) <= ' ' )
+	{
+		if( c == 0 )
+		{
+			if( plen ) *plen = overflow ? -1 : len;
+			return NULL;	// end of file;
+		}
+		data++;
+	}
+
+	// skip // comments
+	if( c == '/' && data[1] == '/' )
+	{
+		while( *data && *data != '\n' )
+			data++;
+		goto skipwhite;
+	}
+
+	// handle quoted strings specially
+	if( c == '\"' )
+	{
+		if( quoted )
+			*quoted = true;
+
+		data++;
+		while( 1 )
+		{
+			c = (byte)*data;
+
+			// unexpected line end
+			if( !c )
+			{
+				token[len] = 0;
+				if( plen ) *plen = overflow ? -1 : len;
+				return data;
+			}
+			data++;
+
+			if( c == '\\' && *data == '"' )
+			{
+				if( len + 1 < size )
+				{
+					token[len] = (byte)*data;
+					len++;
+				}
+				else overflow = true;
+
+				data++;
+				continue;
+			}
+
+			if( c == '\"' )
+			{
+				token[len] = 0;
+				if( plen ) *plen = overflow ? -1 : len;
+				return data;
+			}
+
+			if( len + 1 < size )
+			{
+				token[len] = c;
+				len++;
+			}
+			else overflow = true;
+		}
+	}
+
+	// parse single characters
+	if( COM_IsSingleChar( flags, c ))
+	{
+		if( size >= 2 ) // char and \0
+		{
+			token[len] = c;
+			len++;
+			token[len] = 0;
+			if( plen ) *plen = overflow ? -1 : len;
+			return data + 1;
+		}
+		else
+		{
+			// couldn't pass anything
+			token[0] = 0;
+			if( plen ) *plen = overflow ? -1 : len;
+			return data;
+		}
+	}
+
+	// parse a regular word
+	do
+	{
+		if( len + 1 < size )
+		{
+			token[len] = c;
+			len++;
+		}
+		else overflow = true;
+
+		data++;
+		c = ((byte)*data);
+
+		if( COM_IsSingleChar( flags, c ))
+			break;
+	} while( c > 32 );
+
+	token[len] = 0;
+
+	if( plen ) *plen = overflow ? -1 : len;
+
+	return data;
 }
 
 int matchpattern( const char *in, const char *pattern, qboolean caseinsensitive )

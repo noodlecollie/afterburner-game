@@ -33,8 +33,9 @@ extern qboolean	in_mouseinitialized;
 void IN_Init( void );
 void Host_InputFrame( void );
 void IN_Shutdown( void );
-void IN_MouseEvent( void );
-void IN_ActivateMouse( qboolean force );
+void IN_MouseEvent( int key, int down );
+void IN_MWheelEvent( int direction );
+void IN_ActivateMouse( void );
 void IN_DeactivateMouse( void );
 void IN_MouseSavePos( void );
 void IN_MouseRestorePos( void );
@@ -57,16 +58,13 @@ typedef enum
 	event_motion
 } touchEventType;
 
-extern convar_t *touch_enable;
-extern convar_t *touch_emulate;
+extern convar_t touch_enable;
+extern convar_t touch_emulate;
 
 void Touch_Draw( void );
-void Touch_SetClientOnly( qboolean state );
-void Touch_RemoveButton( const char *name );
-void Touch_HideButtons( const char *name, unsigned char hide );
-//void IN_TouchSetCommand( const char *name, const char *command );
-//void IN_TouchSetTexture( const char *name, const char *texture );
-//void IN_TouchSetColor( const char *name, byte *color );
+void Touch_SetClientOnly( byte state );
+void Touch_RemoveButton( const char *name, qboolean privileged );
+void Touch_HideButtons( const char *name, unsigned char hide, qboolean privileged );
 void Touch_AddClientButton( const char *name, const char *texture, const char *command, float x1, float y1, float x2, float y2, byte *color, int round, float aspect, int flags );
 void Touch_AddDefaultButton( const char *name, const char *texturefile, const char *command, float x1, float y1, float x2, float y2, byte *color, int round, float aspect, int flags );
 void Touch_WriteConfig( void );
@@ -76,6 +74,7 @@ void Touch_GetMove( float * forward, float *side, float *yaw, float *pitch );
 void Touch_ResetDefaultButtons( void );
 int IN_TouchEvent( touchEventType type, int fingerID, float x, float y, float dx, float dy );
 void Touch_KeyEvent( int key, int down );
+qboolean Touch_WantVisibleCursor( void );
 
 //
 // in_joy.c

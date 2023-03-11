@@ -12,11 +12,14 @@ but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 */
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include "platform/platform.h"
 #if XASH_LIB == LIB_POSIX
-
-
+#ifdef XASH_IRIX
+#include "platform/irix/dladdr.h"
+#endif
 #include "common.h"
 #include "library.h"
 #include "filesystem.h"
@@ -79,6 +82,7 @@ void *COM_LoadLibrary( const char *dllname, int build_ordinals_table, qboolean d
 {
 	dll_user_t *hInst = NULL;
 	void *pHandle = NULL;
+	char buf[MAX_VA_STRING];
 
 	COM_ResetLibraryError();
 
@@ -103,11 +107,12 @@ void *COM_LoadLibrary( const char *dllname, int build_ordinals_table, qboolean d
 		// try to find by linker(LD_LIBRARY_PATH, DYLD_LIBRARY_PATH, LD_32_LIBRARY_PATH and so on...)
 		if( !pHandle )
 		{
-			pHandle = dlopen( dllname, RTLD_LAZY );
+			pHandle = dlopen( dllname, RTLD_NOW );
 			if( pHandle )
 				return pHandle;
 
-			COM_PushLibraryError( va( "Failed to find library %s", dllname ));
+			Q_snprintf( buf, sizeof( buf ), "Failed to find library %s", dllname );
+			COM_PushLibraryError( buf );
 			COM_PushLibraryError( dlerror() );
 			return NULL;
 		}
@@ -115,7 +120,8 @@ void *COM_LoadLibrary( const char *dllname, int build_ordinals_table, qboolean d
 
 	if( hInst->custom_loader )
 	{
-		COM_PushLibraryError( va( "Custom library loader is not available. Extract library %s and fix gameinfo.txt!", hInst->fullPath ));
+		Q_snprintf( buf, sizeof( buf ), "Custom library loader is not available. Extract library %s and fix gameinfo.txt!", hInst->fullPath );
+		COM_PushLibraryError( buf );
 		Mem_Free( hInst );
 		return NULL;
 	}
@@ -125,14 +131,16 @@ void *COM_LoadLibrary( const char *dllname, int build_ordinals_table, qboolean d
 	{
 		if( hInst->encrypted )
 		{
-			COM_PushLibraryError( va( "Library %s is encrypted. Cannot load", hInst->shortPath ) );
+			Q_snprintf( buf, sizeof( buf ), "Library %s is encrypted. Cannot load", hInst->shortPath );
+			COM_PushLibraryError( buf );
 			Mem_Free( hInst );
 			return NULL;
 		}
 
 		if( !( hInst->hInstance = Loader_LoadLibrary( hInst->fullPath ) ) )
 		{
-			COM_PushLibraryError( va( "Failed to load DLL with DLL loader: %s", hInst->shortPath ) );
+			Q_snprintf( buf, sizeof( buf ), "Failed to load DLL with DLL loader: %s", hInst->shortPath );
+			COM_PushLibraryError( buf );
 			Mem_Free( hInst );
 			return NULL;
 		}
@@ -140,7 +148,7 @@ void *COM_LoadLibrary( const char *dllname, int build_ordinals_table, qboolean d
 	else
 #endif
 	{
-		if( !( hInst->hInstance = dlopen( hInst->fullPath, RTLD_LAZY ) ) )
+		if( !( hInst->hInstance = dlopen( hInst->fullPath, RTLD_NOW ) ) )
 		{
 			COM_PushLibraryError( dlerror() );
 			Mem_Free( hInst );
@@ -189,12 +197,7 @@ void *COM_GetProcAddress( void *hInstance, const char *name )
 
 void *COM_FunctionFromName( void *hInstance, const char *pName )
 {
-	void *function;
-	if( !( function = COM_GetProcAddress( hInstance, pName ) ) )
-	{
-		Con_Reportf( S_ERROR "FunctionFromName: Can't get symbol %s: %s\n", pName, dlerror());
-	}
-	return function;
+	return COM_GetProcAddress( hInstance, pName );
 }
 
 #ifdef XASH_DYNAMIC_DLADDR

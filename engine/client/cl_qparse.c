@@ -237,10 +237,6 @@ static void CL_ParseQuakeServerInfo( sizebuf_t *msg )
 	}
 	else Cvar_Reset( "r_decals" );
 
-	// re-init mouse
-	if( cl.background )
-		host.mouse_visible = false;
-
 	if( cl.background )	// tell the game parts about background state
 		Cvar_FullSet( "cl_background", "1", FCVAR_READ_ONLY );
 	else Cvar_FullSet( "cl_background", "0", FCVAR_READ_ONLY );
@@ -825,6 +821,9 @@ CL_QuakeStuffText
 void CL_QuakeStuffText( const char *text )
 {
 	Q_strncat( cmd_buf, text, sizeof( cmd_buf ));
+
+	// a1ba: didn't filtered, anyway quake protocol
+	// only supported for demos, not network games
 	Cbuf_AddText( text );
 }
 
@@ -861,9 +860,7 @@ void CL_QuakeExecStuff( void )
 
 		if( !*text ) break;
 
-		host.com_ignorebracket = true;
-		text = COM_ParseFile( text, token );
-		host.com_ignorebracket = false;
+		text = COM_ParseFileSafe( text, token, sizeof( token ), PFILE_IGNOREBRACKET, NULL, NULL );
 
 		if( !text ) break;
 

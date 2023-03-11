@@ -60,6 +60,28 @@ qboolean SV_CheckEdict( const edict_t *e, const char *file, const int line )
 }
 #endif
 
+static edict_t *SV_PEntityOfEntIndex( const int iEntIndex, const qboolean allentities )
+{
+	if( iEntIndex >= 0 && iEntIndex < GI->max_edicts )
+	{
+		edict_t *pEdict = EDICT_NUM( iEntIndex );
+		qboolean player = allentities ? iEntIndex <= svs.maxclients : iEntIndex < svs.maxclients;
+
+		if( !iEntIndex || FBitSet( host.features, ENGINE_QUAKE_COMPATIBLE ))
+			return pEdict; // just get access to array
+
+		if( SV_IsValidEdict( pEdict ) && pEdict->pvPrivateData )
+			return pEdict;
+
+		// g-cont: world and clients can be accessed even without private data
+		if( SV_IsValidEdict( pEdict ) && player )
+			return pEdict;
+	}
+
+	return NULL;
+}
+
+
 /*
 =============
 EntvarsDescription
@@ -93,7 +115,7 @@ entavrs table for FindEntityByString
 */
 TYPEDESCRIPTION *SV_GetEntvarsDescirption( int number )
 {
-	if( number < 0 && number >= ENTVARS_COUNT )
+	if( number < 0 || number >= ENTVARS_COUNT )
 		return NULL;
 	return &gEntvarsDescription[number];
 }
@@ -233,6 +255,63 @@ void SV_CopyTraceToGlobal( trace_t *trace )
 	if( SV_IsValidEdict( trace->ent ))
 		svgame.globals->trace_ent = trace->ent;
 	else svgame.globals->trace_ent = svgame.edicts;
+}
+
+/*
+==============
+SV_SetModel
+==============
+*/
+void SV_SetModel( edict_t *ent, const char *modelname )
+{
+	char	name[MAX_QPATH];
+	qboolean	found = false;
+	model_t	*mod;
+	int	i = 1;
+
+	if( !SV_IsValidEdict( ent ))
+	{
+		Con_Printf( S_WARN "SV_SetModel: invalid entity %s\n", SV_ClassName( ent ));
+		return;
+	}
+
+	if( !modelname || modelname[0] <= ' ' )
+	{
+		Con_Printf( S_WARN "SV_SetModel: null name\n" );
+		return;
+	}
+
+	if( *modelname == '\\' || *modelname == '/' )
+		modelname++;
+
+	Q_strncpy( name, modelname, sizeof( name ));
+	COM_FixSlashes( name );
+
+	i = SV_ModelIndex( name );
+	if( i == 0 )
+	{
+		if( sv.state == ss_active )
+			Con_Printf( S_ERROR "SV_SetModel: failed to set model %s: world model cannot be changed\n", name );
+		return;
+	}
+
+	if( COM_CheckString( name ))
+	{
+		ent->v.model = MAKE_STRING( sv.model_precache[i] );
+		ent->v.modelindex = i;
+		mod = sv.models[i];
+	}
+	else
+	{
+		// model will be cleared
+		ent->v.model = ent->v.modelindex = 0;
+		mod = NULL;
+	}
+
+	// set the model size
+	if( mod && mod->type != mod_studio )
+		SV_SetMinMaxSize( ent, mod->mins, mod->maxs, true );
+	else SV_SetMinMaxSize( ent, vec3_origin, vec3_origin, true );
 }
 
 /*
@@ -586,7 +665,7 @@ void SV_RestartAmbientSounds( void )
 			continue;
 
 		S_StopSound( si->entnum, si->channel, si->name );
-		SV_StartSound( pfnPEntityOfEntIndex( si->entnum ), CHAN_STATIC, si->name, si->volume, si->attenuation, 0, si->pitch );
+		SV_StartSound( SV_PEntityOfEntIndex( si->entnum, true ), CHAN_STATIC, si->name, si->volume, si->attenuation, 0, si->pitch );
 	}
 
 #if !XASH_DEDICATED // TODO: ???
@@ -640,10 +719,10 @@ void SV_RestartDecals( void )
 	for( i = 0; i < host.numdecals; i++ )
 	{
 		entry = &host.decalList[i];
-		modelIndex = pfnPEntityOfEntIndex( entry->entityIndex )->v.modelindex;
+		modelIndex = SV_PEntityOfEntIndex( entry->entityIndex, true )->v.modelindex;
 
 		// game override
-		if( SV_RestoreCustomDecal( entry, pfnPEntityOfEntIndex( entry->entityIndex ), false ))
+		if( SV_RestoreCustomDecal( entry, SV_PEntityOfEntIndex( entry->entityIndex, true ), false ))
 			continue;
 
 		decalIndex = pfnDecalIndex( entry->name );
@@ -770,6 +849,7 @@ void SV_WriteEntityPatch( const char *filename )
 	byte		buf[MAX_TOKEN]; // 1 kb
 	string		bspfilename;
 	dheader_t		*header;
+	dlump_t entities;
 	file_t		*f;
 
 	Q_snprintf( bspfilename, sizeof( bspfilename ), "maps/%s.bsp", filename );
@@ -782,14 +862,14 @@ void SV_WriteEntityPatch( const char *filename )
 	header = (dheader_t *)buf;
 
 	// check all the lumps and some other errors
-	if( !Mod_TestBmodelLumps( bspfilename, buf, true ))
+	if( !Mod_TestBmodelLumps( f, bspfilename, buf, true, &entities ))
 	{
 		FS_Close( f );
 		return;
 	}
 
-	lumpofs = header->lumps[LUMP_ENTITIES].fileofs;
-	lumplen = header->lumps[LUMP_ENTITIES].filelen;
+	lumpofs = entities.fileofs;
+	lumplen = entities.filelen;
 
 	if( lumplen >= 10 )
 	{
@@ -820,6 +900,7 @@ static char *SV_ReadEntityScript( const char *filename, int *flags )
 	byte		buf[MAX_TOKEN];
 	char		*ents = NULL;
 	dheader_t		*header;
+	dlump_t entities;
 	size_t		ft1, ft2;
 	file_t		*f;
 
@@ -836,7 +917,7 @@ static char *SV_ReadEntityScript( const char *filename, int *flags )
 	header = (dheader_t *)buf;
 
 	// check all the lumps and some other errors
-	if( !Mod_TestBmodelLumps( bspfilename, buf, (host_developer.value) ? false : true ))
+	if( !Mod_TestBmodelLumps( f, bspfilename, buf, (host_developer.value) ? false : true, &entities ))
 	{
 		SetBits( *flags, MAP_INVALID_VERSION );
 		FS_Close( f );
@@ -844,8 +925,8 @@ static char *SV_ReadEntityScript( const char *filename, int *flags )
 	}
 
 	// after call Mod_TestBmodelLumps we gurantee what map is valid
-	lumpofs = header->lumps[LUMP_ENTITIES].fileofs;
-	lumplen = header->lumps[LUMP_ENTITIES].filelen;
+	lumpofs = entities.fileofs;
+	lumplen = entities.filelen;
 
 	// check for entfile too
 	Q_snprintf( entfilename, sizeof( entfilename ), "maps/%s.ent", filename );
@@ -908,12 +989,12 @@ uint SV_MapIsValid( const char *filename, const char *spawn_entity, const char *
 
 		pfile = ents;
 
-		while(( pfile = COM_ParseFile( pfile, token )) != NULL )
+		while(( pfile = COM_ParseFile( pfile, token, sizeof( token ))) != NULL )
 		{
 			if( !Q_strcmp( token, "classname" ))
 			{
 				// check classname for spawn entity
-				pfile = COM_ParseFile( pfile, check_name );
+				pfile = COM_ParseFile( pfile, check_name, sizeof( check_name ));
 				if( !Q_strcmp( spawn_entity, check_name ))
 				{
 					SetBits( flags, MAP_HAS_SPAWNPOINT );
@@ -926,7 +1007,7 @@ uint SV_MapIsValid( const char *filename, const char *spawn_entity, const char *
 			else if( need_landmark && !Q_strcmp( token, "targetname" ))
 			{
 				// check targetname for landmark entity
-				pfile = COM_ParseFile( pfile, check_name );
+				pfile = COM_ParseFile( pfile, check_name, sizeof( check_name ));
 
 				if( !Q_strcmp( landmark_name, check_name ))
 				{
@@ -1299,61 +1380,7 @@ pfnSetModel
 */
 void GAME_EXPORT pfnSetModel( edict_t *e, const char *m )
 {
-	char	name[MAX_QPATH];
-	qboolean	found = false;
-	model_t	*mod;
-	int	i = 1;
-
-	if( !SV_IsValidEdict( e ))
-		return;
-
-	if( *m == '\\' || *m == '/' ) m++;
-	Q_strncpy( name, m, sizeof( name ));
-	COM_FixSlashes( name );
-
-	if( COM_CheckString( name ))
-	{
-		// check to see if model was properly precached
-		for( ; i < MAX_MODELS && sv.model_precache[i][0]; i++ )
-		{
-			if( !Q_stricmp( sv.model_precache[i], name ))
-			{
-				found = true;
-				break;
-			}
-		}
-
-		if( !found )
-		{
-			Con_Printf( S_ERROR "Failed to set model %s: was not precached\n", name );
-			return;
-		}
-	}
-
-	if( e == svgame.edicts )
-	{
-		if( sv.state == ss_active )
-			Con_Printf( S_ERROR "Failed to set model %s: world model cannot be changed\n", name );
-		return;
-	}
-
-	if( COM_CheckString( name ))
-	{
-		e->v.model = MAKE_STRING( sv.model_precache[i] );
-		e->v.modelindex = i;
-		mod = sv.models[i];
-	}
-	else
-	{
-		// model will be cleared
-		e->v.model = e->v.modelindex = 0;
-		mod = NULL;
-	}
-
-	// set the model size
-	if( mod && mod->type != mod_studio )
-		SV_SetMinMaxSize( e, mod->mins, mod->maxs, true );
-	else SV_SetMinMaxSize( e, vec3_origin, vec3_origin, true );
+	SV_SetModel( e, m );
 }
 
 /*
@@ -2067,18 +2094,21 @@ int SV_BuildSoundMsg( sizebuf_t *msg, edict_t *ent, int chan, const char *sample
 	}
 	else
 	{
-		// TESTTEST
-		if( *sample == '*' ) chan = CHAN_AUTO;
+		// '*' is special symbol to handle stream sounds
+		// (CHAN_VOICE but cannot be overriden)
+		// originally handled on client side
+		if( *sample == '*' )
+			chan = CHAN_STREAM;
 
 		// precache_sound can be used twice: cache sounds when loading
 		// and return sound index when server is active
 		sound_idx = SV_SoundIndex( sample );
-	}
 
-	if( !sound_idx )
-	{
-		Con_Printf( S_ERROR "SV_StartSound: %s not precached (%d)\n", sample, sound_idx );
-		return 0;
+		if( !sound_idx )
+		{
+			Con_Printf( S_ERROR "SV_StartSound: %s not precached (%d)\n", sample, sound_idx );
+			return 0;
+		}
 	}
 
 	spawn = FBitSet( flags, SND_RESTORE_POSITION ) ? false : true;
@@ -2434,21 +2464,6 @@ pfnServerExecute
 void GAME_EXPORT pfnServerExecute( void )
 {
 	Cbuf_Execute();
-
-	if( svgame.config_executed )
-		return;
-
-	// here we restore arhcived cvars only from game.dll
-	host.apply_game_config = true;
-	Cbuf_AddText( "exec config.cfg\n" );
-	Cbuf_Execute();
-
-	if( host.sv_cvars_restored > 0 )
-		Con_Reportf( "server executing ^2config.cfg^7 (%i cvars)\n", host.sv_cvars_restored );
-
-	host.apply_game_config = false;
-	svgame.config_executed = true;
-	host.sv_cvars_restored = 0;
 }
 
 /*
@@ -2619,6 +2634,13 @@ void GAME_EXPORT pfnMessageBegin( int msg_dest, int msg_num, const float *pOrigi
 	svgame.msg_realsize = 0;
 	svgame.msg_dest = msg_dest;
 	svgame.msg_ent = ed;
+
+	// enable message tracing
+	svgame.msg_trace = sv_trace_messages.value != 0 &&
+		msg_num > svc_lastmsg &&
+		Q_strcmp( svgame.msg_name, "ReqState" );
+
+	if( svgame.msg_trace ) Con_Printf( "^3%s( %i, %s )\n", __FUNCTION__, msg_dest, svgame.msg_name );
 }
 
 /*
@@ -2631,6 +2653,7 @@ void GAME_EXPORT pfnMessageEnd( void )
 {
 	const char	*name = "Unknown";
 	float		*org = NULL;
+	word realsize;
 
 	if( svgame.msg_name ) name = svgame.msg_name;
 	if( !svgame.msg_started ) Host_Error( "MessageEnd: called with no active message\n" );
@@ -2662,7 +2685,8 @@ void GAME_EXPORT pfnMessageEnd( void )
 				return;
 			}
 
-			sv.multicast.pData[svgame.msg_size_index] = svgame.msg_realsize;
+			realsize = svgame.msg_realsize;
+			memcpy( &sv.multicast.pData[svgame.msg_size_index], &realsize, sizeof( realsize ));
 		}
 	}
 	else if( svgame.msg[svgame.msg_index].size != -1 )
@@ -2694,7 +2718,8 @@ void GAME_EXPORT pfnMessageEnd( void )
 			return;
 		}
 
-		*(word *)&sv.multicast.pData[svgame.msg_size_index] = svgame.msg_realsize;
+		realsize = svgame.msg_realsize;
+		memcpy( &sv.multicast.pData[svgame.msg_size_index], &realsize, sizeof( realsize ));
 	}
 	else
 	{
@@ -2717,6 +2742,8 @@ void GAME_EXPORT pfnMessageEnd( void )
 	svgame.msg_dest = bound( MSG_BROADCAST, svgame.msg_dest, MSG_SPEC );
 
 	SV_Multicast( svgame.msg_dest, org, svgame.msg_ent, true, false );
+
+	if( svgame.msg_trace ) Con_Printf( "^3%s()\n", __FUNCTION__ );
 }
 
 /*
@@ -2729,6 +2756,7 @@ void GAME_EXPORT pfnWriteByte( int iValue )
 {
 	if( iValue == -1 ) iValue = 0xFF; // convert char to byte
 	MSG_WriteByte( &sv.multicast, (byte)iValue );
+	if( svgame.msg_trace ) Con_Printf( "\t^3%s( %i )\n", __FUNCTION__, iValue );
 	svgame.msg_realsize++;
 }
 
@@ -2740,7 +2768,8 @@ pfnWriteChar
 */
 void GAME_EXPORT pfnWriteChar( int iValue )
 {
-	MSG_WriteChar( &sv.multicast, (char)iValue );
+	MSG_WriteChar( &sv.multicast, (signed char)iValue );
+	if( svgame.msg_trace ) Con_Printf( "\t^3%s( %i )\n", __FUNCTION__, iValue );
 	svgame.msg_realsize++;
 }
 
@@ -2753,6 +2782,7 @@ pfnWriteShort
 void GAME_EXPORT pfnWriteShort( int iValue )
 {
 	MSG_WriteShort( &sv.multicast, (short)iValue );
+	if( svgame.msg_trace ) Con_Printf( "\t^3%s( %i )\n", __FUNCTION__, iValue );
 	svgame.msg_realsize += 2;
 }
 
@@ -2765,6 +2795,7 @@ pfnWriteLong
 void GAME_EXPORT pfnWriteLong( int iValue )
 {
 	MSG_WriteLong( &sv.multicast, iValue );
+	if( svgame.msg_trace ) Con_Printf( "\t^3%s( %i )\n", __FUNCTION__, iValue );
 	svgame.msg_realsize += 4;
 }
 
@@ -2780,6 +2811,7 @@ void GAME_EXPORT pfnWriteAngle( float flValue )
 	int	iAngle = ((int)(( flValue ) * 256 / 360) & 255);
 
 	MSG_WriteChar( &sv.multicast, iAngle );
+	if( svgame.msg_trace ) Con_Printf( "\t^3%s( %f )\n", __FUNCTION__, flValue );
 	svgame.msg_realsize += 1;
 }
 
@@ -2792,6 +2824,7 @@ pfnWriteCoord
 void GAME_EXPORT pfnWriteCoord( float flValue )
 {
 	MSG_WriteCoord( &sv.multicast, flValue );
+	if( svgame.msg_trace ) Con_Printf( "\t^3%s( %f )\n", __FUNCTION__, flValue );
 	svgame.msg_realsize += 2;
 }
 
@@ -2804,6 +2837,7 @@ pfnWriteBytes
 void pfnWriteBytes( const byte *bytes, int count )
 {
 	MSG_WriteBytes( &sv.multicast, bytes, count );
+	if( svgame.msg_trace ) Con_Printf( "\t^3%s( %i )\n", __FUNCTION__, count );
 	svgame.msg_realsize += count;
 }
 
@@ -2865,6 +2899,7 @@ void GAME_EXPORT pfnWriteString( const char *src )
 
 	*dst = '\0'; // string end (not included in count)
 	MSG_WriteString( &sv.multicast, string );
+	if( svgame.msg_trace ) Con_Printf( "\t^3%s( %s )\n", __FUNCTION__, string );
 
 	// NOTE: some messages with constant string length can be marked as known sized
 	svgame.msg_realsize += len;
@@ -2881,6 +2916,7 @@ void GAME_EXPORT pfnWriteEntity( int iValue )
 	if( iValue < 0 || iValue >= svgame.numEntities )
 		Host_Error( "MSG_WriteEntity: invalid entnumber %i\n", iValue );
 	MSG_WriteShort( &sv.multicast, (short)iValue );
+	if( svgame.msg_trace ) Con_Printf( "\t^3%s( %i )\n", __FUNCTION__, iValue );
 	svgame.msg_realsize += 2;
 }
 
@@ -3063,11 +3099,9 @@ void SV_SetStringArrayMode( qboolean dynamic )
 #endif
 }
 
-#ifdef XASH_64BIT
-#if !XASH_WIN32
+#if XASH_64BIT && !XASH_WIN32 && !XASH_APPLE && !XASH_NSWITCH
 #define USE_MMAP
 #include <sys/mman.h>
-#endif
 #endif
 
 /*
@@ -3099,14 +3133,21 @@ void SV_AllocStringPool( void )
 
 #ifdef USE_MMAP
 	{
+		uint flags;
 		size_t pagesize = sysconf( _SC_PAGESIZE );
 		int arrlen = (str64.maxstringarray * 2) & ~(pagesize - 1);
 		void *base = svgame.dllFuncs.pfnGameInit;
 		void *start = svgame.hInstance - arrlen;
 
+#if defined(MAP_ANON)
+		flags = MAP_ANON | MAP_PRIVATE;
+#elif defined(MAP_ANONYMOUS)
+		flags = MAP_ANONYMOUS | MAP_PRIVATE;
+#endif
+
 		while( start - base > INT_MIN )
 		{
-			void *mapptr = mmap((void*)((unsigned long)start & ~(pagesize - 1)), arrlen, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, 0, 0 );
+			void *mapptr = mmap((void*)((unsigned long)start & ~(pagesize - 1)), arrlen, PROT_READ | PROT_WRITE, flags, 0, 0 );
 			if( mapptr && mapptr != (void*)-1 && mapptr - base > INT_MIN && mapptr - base < INT_MAX )
 			{
 				ptr = mapptr;
@@ -3121,7 +3162,7 @@ void SV_AllocStringPool( void )
 			start = base;
 			while( start - base < INT_MAX )
 			{
-				void *mapptr = mmap((void*)((unsigned long)start & ~(pagesize - 1)), arrlen, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, 0, 0 );
+				void *mapptr = mmap((void*)((unsigned long)start & ~(pagesize - 1)), arrlen, PROT_READ | PROT_WRITE, flags, 0, 0 );
 				if( mapptr && mapptr != (void*)-1  && mapptr - base > INT_MIN && mapptr - base < INT_MAX )
 				{
 					ptr = mapptr;
@@ -3343,24 +3384,23 @@ pfnPEntityOfEntIndex
 
 =============
 */
-edict_t *pfnPEntityOfEntIndex( int iEntIndex )
+static edict_t *pfnPEntityOfEntIndex( int iEntIndex )
 {
-	if( iEntIndex >= 0 && iEntIndex < GI->max_edicts )
-	{
-		edict_t	*pEdict = EDICT_NUM( iEntIndex );
+	// have to be bug-compatible with GoldSrc in this function
+	if( host.bugcomp == BUGCOMP_GOLDSRC )
+		return SV_PEntityOfEntIndex( iEntIndex, false );
+	return SV_PEntityOfEntIndex( iEntIndex, true );
+}
 
-		if( !iEntIndex || FBitSet( host.features, ENGINE_QUAKE_COMPATIBLE ))
-			return pEdict; // just get access to array
+/*
+=============
+pfnPEntityOfEntIndexAllEntities
 
-		if( SV_IsValidEdict( pEdict ) && pEdict->pvPrivateData )
-			return pEdict;
-
-		// g-cont: world and clients can be acessed even without private data!
-		if( SV_IsValidEdict( pEdict ) && SV_IsPlayerIndex( iEntIndex ))
-			return pEdict;
-	}
-
-	return NULL;
+=============
+*/
+static edict_t *pfnPEntityOfEntIndexAllEntities( int iEntIndex )
+{
+	return SV_PEntityOfEntIndex( iEntIndex, true );
 }
 
 /*
@@ -3863,7 +3903,7 @@ char *pfnGetInfoKeyBuffer( edict_t *e )
 	if(( cl = SV_ClientFromEdict( e, false )) != NULL )
 		return cl->userinfo;
 
-	return ""; // assume error
+	return (char*)""; // assume error
 }
 
 /*
@@ -4016,7 +4056,7 @@ void GAME_EXPORT SV_PlaybackEventFull( const struct event_fire_args_s* inArgs )
 	}
 
 	// first check event for out of bounds
-	if( inArgs->eventIndex < 1 || inArgs->eventIndex > MAX_EVENTS )
+	if( inArgs->eventIndex < 1 || inArgs->eventIndex >= MAX_EVENTS )
 	{
 		Con_Printf( S_ERROR "EV_Playback: invalid eventindex %i\n", inArgs->eventIndex );
 		return;
@@ -4237,12 +4277,12 @@ byte *pfnSetFatPVS( const float *org )
 	if( !sv.worldmodel->visdata || sv_novis->value || !org || CL_DisableVisibility( ))
 		fullvis = true;
 
-	ASSERT( pfnGetCurrentPlayer() != -1 );
-
 	// portals can't change viewpoint!
 	if( !FBitSet( sv.hostflags, SVF_MERGE_VISIBILITY ))
 	{
 		vec3_t	viewPos, offset;
+
+		ASSERT( pfnGetCurrentPlayer() != -1 );
 
 		// see code from client.cpp for understanding:
 		// org = pView->v.origin + pView->v.view_ofs;
@@ -4287,12 +4327,12 @@ byte *pfnSetFatPAS( const float *org )
 	if( !sv.worldmodel->visdata || sv_novis->value || !org || CL_DisableVisibility( ))
 		fullvis = true;
 
-	ASSERT( pfnGetCurrentPlayer() != -1 );
-
 	// portals can't change viewpoint!
 	if( !FBitSet( sv.hostflags, SVF_MERGE_VISIBILITY ))
 	{
 		vec3_t	viewPos, offset;
+
+		ASSERT( pfnGetCurrentPlayer() != -1 );
 
 		// see code from client.cpp for understanding:
 		// org = pView->v.origin + pView->v.view_ofs;
@@ -4809,6 +4849,7 @@ static enginefuncs_t gEngfuncs =
 	pfnQueryClientCvarValue,
 	pfnQueryClientCvarValue2,
 	COM_CheckParm,
+	pfnPEntityOfEntIndexAllEntities,
 	pfnModelSequenceDuration,
 	pfnGetHitboxCount,
 	pfnGetTransformedHitboxPoints,
@@ -4838,14 +4879,14 @@ qboolean SV_ParseEdict( char **pfile, edict_t *ent )
 		string	keyname;
 
 		// parse key
-		if(( *pfile = COM_ParseFile( *pfile, token )) == NULL )
+		if(( *pfile = COM_ParseFile( *pfile, token, sizeof( token ))) == NULL )
 			Host_Error( "ED_ParseEdict: EOF without closing brace\n" );
 		if( token[0] == '}' ) break; // end of desc
 
 		Q_strncpy( keyname, token, sizeof( keyname ));
 
 		// parse value
-		if(( *pfile = COM_ParseFile( *pfile, token )) == NULL )
+		if(( *pfile = COM_ParseFile( *pfile, token, sizeof( token ))) == NULL )
 			Host_Error( "ED_ParseEdict: EOF without closing brace\n" );
 
 		if( token[0] == '}' )
@@ -4867,7 +4908,7 @@ qboolean SV_ParseEdict( char **pfile, edict_t *ent )
 		if( !token[0] ) continue;
 
 		// create keyvalue strings
-		pkvd[numpairs].szClassName = ""; // unknown at this moment
+		pkvd[numpairs].szClassName = (char*)""; // unknown at this moment
 		pkvd[numpairs].szKeyName = copystring( keyname );
 		pkvd[numpairs].szValue = copystring( token );
 		pkvd[numpairs].fHandled = false;
@@ -4905,8 +4946,8 @@ qboolean SV_ParseEdict( char **pfile, edict_t *ent )
 	{
 		if( numpairs < 256 )
 		{
-			pkvd[numpairs].szClassName = "custom";
-			pkvd[numpairs].szKeyName = "customclass";
+			pkvd[numpairs].szClassName = (char*)"custom";
+			pkvd[numpairs].szKeyName = (char*)"customclass";
 			pkvd[numpairs].szValue = classname;
 			pkvd[numpairs].fHandled = false;
 			numpairs++;
@@ -4974,7 +5015,7 @@ qboolean SV_ParseEdict( char **pfile, edict_t *ent )
 			Mem_Free( pkvd[i].szValue );
 	}
 
-	if( classname && Mem_IsAllocatedExt( host.mempool, classname ))
+	if( Mem_IsAllocatedExt( host.mempool, classname ))
 		Mem_Free( classname );
 
 	return true;
@@ -5007,7 +5048,7 @@ void SV_LoadFromFile( const char *mapname, char *entities )
 		inhibited = 0;
 
 		// parse ents
-		while(( entities = COM_ParseFile( entities, token )) != NULL )
+		while(( entities = COM_ParseFile( entities, token, sizeof( token ))) != NULL )
 		{
 			if( token[0] != '{' )
 				Host_Error( "ED_LoadFromFile: found %s when expecting {\n", token );
@@ -5119,6 +5160,7 @@ void SV_UnloadProgs( void )
 
 	Mod_ResetStudioAPI ();
 
+	svs.game_library_loaded = false;
 	COM_FreeLibrary( svgame.hInstance );
 	Mem_FreePool( &svgame.mempool );
 	memset( &svgame, 0, sizeof( svgame ));

@@ -151,8 +151,7 @@ same as r_speeds but for network channel
 void SCR_NetSpeeds( void )
 {
 	static char	msg[MAX_SYSPATH];
-	int		x, y, height;
-	char		*p, *start, *end;
+	int		x, y;
 	float		time = cl.mtime[0];
 	static int	min_svfps = 100;
 	static int	max_svfps = 0;
@@ -161,6 +160,7 @@ void SCR_NetSpeeds( void )
 	static int	max_clfps = 0;
 	int		cur_clfps = 0;
 	rgba_t		color;
+	cl_font_t *font = Con_GetCurFont();
 
 	if( !host.allow_console )
 		return;
@@ -197,25 +197,11 @@ void SCR_NetSpeeds( void )
 		Q_memprint( cls.netchan.total_sended )
 	);
 
-	x = refState.width - 320;
+	x = refState.width - 320 * font->scale;
 	y = 384;
 
-	Con_DrawStringLen( NULL, NULL, &height );
 	MakeRGBA( color, 255, 255, 255, 255 );
-
-	p = start = msg;
-
-	do
-	{
-		end = Q_strchr( p, '\n' );
-		if( end ) msg[end-start] = '\0';
-
-		Con_DrawString( x, y, p, color );
-		y += height;
-
-		if( end ) p = end + 1;
-		else break;
-	} while( 1 );
+	CL_DrawString( x, y, msg, color, font, FONT_DRAW_RESETCOLORONLF );
 }
 
 /*
@@ -232,31 +218,15 @@ void SCR_RSpeeds( void )
 
 	if( ref.dllFuncs.R_SpeedsMessage( msg, sizeof( msg )))
 	{
-		int	x, y, height;
-		char	*p, *start, *end;
+		int	x, y;
 		rgba_t	color;
+		cl_font_t *font = Con_GetCurFont();
 
-		x = refState.width - 340;
+		x = refState.width - 340 * font->scale;
 		y = 64;
 
-		Con_DrawStringLen( NULL, NULL, &height );
 		MakeRGBA( color, 255, 255, 255, 255 );
-
-		p = start = msg;
-		do
-		{
-			end = Q_strchr( p, '\n' );
-			if( end ) msg[end-start] = '\0';
-
-			Con_DrawString( x, y, p, color );
-			y += height;
-
-			// handle '\n\n'
-			if( *p == '\n' )
-				y += height;
-			if( end ) p = end + 1;
-			else break;
-		} while( 1 );
+		CL_DrawString( x, y, msg, color, font, FONT_DRAW_RESETCOLORONLF );
 	}
 }
 
@@ -419,7 +389,6 @@ void SCR_BeginLoadingPlaque( qboolean is_background )
 	cls.draw_changelevel = !is_background;
 	SCR_UpdateScreen();
 	cls.disable_screen = host.realtime;
-	cls.disable_servercount = cl.servercount;
 	cl.background = is_background;		// set right state before svc_serverdata is came
 
 	if( !Host_IsDedicated() )
@@ -579,77 +548,6 @@ void SCR_UpdateScreen( void )
 	V_PostRender();
 }
 
-qboolean SCR_LoadFixedWidthFont( const char *fontname )
-{
-	int	i, fontWidth;
-
-	if( cls.creditsFont.valid )
-		return true; // already loaded
-
-	if( !FS_FileExists( fontname, false ))
-		return false;
-
-	cls.creditsFont.hFontTexture = ref.dllFuncs.GL_LoadTexture( fontname, NULL, 0, TF_IMAGE|TF_KEEP_SOURCE );
-	R_GetTextureParms( &fontWidth, NULL, cls.creditsFont.hFontTexture );
-	cls.creditsFont.charHeight = clgame.scrInfo.iCharHeight = fontWidth / 16;
-	cls.creditsFont.type = FONT_FIXED;
-	cls.creditsFont.valid = true;
-
-	// build fixed rectangles
-	for( i = 0; i < 256; i++ )
-	{
-		cls.creditsFont.fontRc[i].left = (i * (fontWidth / 16)) % fontWidth;
-		cls.creditsFont.fontRc[i].right = cls.creditsFont.fontRc[i].left + fontWidth / 16;
-		cls.creditsFont.fontRc[i].top = (i / 16) * (fontWidth / 16);
-		cls.creditsFont.fontRc[i].bottom = cls.creditsFont.fontRc[i].top + fontWidth / 16;
-		cls.creditsFont.charWidths[i] = clgame.scrInfo.charWidths[i] = fontWidth / 16;
-	}
-
-	return true;
-}
-
-qboolean SCR_LoadVariableWidthFont( const char *fontname )
-{
-	int	i, fontWidth;
-	byte	*buffer;
-	fs_offset_t	length;
-	qfont_t	*src;
-
-	if( cls.creditsFont.valid )
-		return true; // already loaded
-
-	if( !FS_FileExists( fontname, false ))
-		return false;
-
-	cls.creditsFont.hFontTexture = ref.dllFuncs.GL_LoadTexture( fontname, NULL, 0, TF_IMAGE );
-	R_GetTextureParms( &fontWidth, NULL, cls.creditsFont.hFontTexture );
-
-	// half-life font with variable chars witdh
-	buffer = FS_LoadFile( fontname, &length, false );
-
-	// setup creditsfont
-	if( buffer && length >= sizeof( qfont_t ))
-	{
-		src = (qfont_t *)buffer;
-		cls.creditsFont.charHeight = clgame.scrInfo.iCharHeight = src->rowheight;
-		cls.creditsFont.type = FONT_VARIABLE;
-
-		// build rectangles
-		for( i = 0; i < 256; i++ )
-		{
-			cls.creditsFont.fontRc[i].left = (word)src->fontinfo[i].startoffset % fontWidth;
-			cls.creditsFont.fontRc[i].right = cls.creditsFont.fontRc[i].left + src->fontinfo[i].charwidth;
-			cls.creditsFont.fontRc[i].top = (word)src->fontinfo[i].startoffset / fontWidth;
-			cls.creditsFont.fontRc[i].bottom = cls.creditsFont.fontRc[i].top + src->rowheight;
-			cls.creditsFont.charWidths[i] = clgame.scrInfo.charWidths[i] = src->fontinfo[i].charwidth;
-		}
-		cls.creditsFont.valid = true;
-	}
-	if( buffer ) Mem_Free( buffer );
-
-	return true;
-}
-
 /*
 ================
 SCR_LoadCreditsFont
@@ -659,22 +557,41 @@ INTERNAL RESOURCE
 */
 void SCR_LoadCreditsFont( void )
 {
-	const char *path = "gfx/creditsfont.fnt";
-	dword crc;
+	cl_font_t *const font = &cls.creditsFont;
+	qboolean success = false;
+	float scale = hud_fontscale->value;
+	dword crc = 0;
 
 	// replace default gfx.wad textures by current charset's font
 	if( !CRC32_File( &crc, "gfx.wad" ) || crc == 0x49eb9f16 )
 	{
-		const char *path2 = va("creditsfont_%s.fnt", Cvar_VariableString( "con_charset" ) );
-		if( FS_FileExists( path2, false ) )
-			path = path2;
+		string charsetFnt;
+
+		if( Q_snprintf( charsetFnt, sizeof( charsetFnt ),
+			"creditsfont_%s.fnt", Cvar_VariableString( "con_charset" )) > 0 )
+		{
+			if( FS_FileExists( charsetFnt, false ))
+				success = Con_LoadVariableWidthFont( charsetFnt, font, scale, kRenderTransAdd, TF_FONT );
+		}
 	}
 
-	if( !SCR_LoadVariableWidthFont( path ))
+	if( !success )
+		success = Con_LoadVariableWidthFont( "gfx/creditsfont.fnt", font, scale, kRenderTransAdd, TF_FONT );
+
+	if( !success )
+		success = Con_LoadFixedWidthFont( "gfx/conchars", font, scale, kRenderTransAdd, TF_FONT );
+
+	// copy font size for client.dll
+	if( success )
 	{
-		if( !SCR_LoadFixedWidthFont( "gfx/conchars" ))
-			Con_DPrintf( S_ERROR "failed to load HUD font\n" );
+		int i;
+
+		clgame.scrInfo.iCharHeight = cls.creditsFont.charHeight;
+
+		for( i = 0; i < ARRAYSIZE( cls.creditsFont.charWidths ); i++ )
+			clgame.scrInfo.charWidths[i] = cls.creditsFont.charWidths[i];
 	}
+	else Con_DPrintf( S_ERROR "failed to load HUD font\n" );
 }
 
 /*
@@ -796,7 +713,11 @@ void SCR_VidInit( void )
 		gameui.globals->scrHeight = refState.height;
 	}
 
-	VGui_Startup( NULL, refState.width, refState.height ); // initialized already, so pass NULL
+	// notify vgui about screen size change
+	if( clgame.hInstance )
+	{
+		VGui_Startup( refState.width, refState.height );
+	}
 
 	CL_ClearSpriteTextures(); // now all hud sprites are invalid
 
@@ -827,7 +748,7 @@ void SCR_Init( void )
 	v_dark = Cvar_Get( "v_dark", "0", 0, "starts level from dark screen" );
 	scr_viewsize = Cvar_Get( "viewsize", "120", FCVAR_ARCHIVE, "screen size" );
 	net_speeds = Cvar_Get( "net_speeds", "0", FCVAR_ARCHIVE, "show network packets" );
-	cl_showfps = Cvar_Get( "cl_showfps", "1", FCVAR_ARCHIVE, "show client fps" );
+	cl_showfps = Cvar_Get( "cl_showfps", "0", FCVAR_ARCHIVE, "show client fps" );
 	cl_showpos = Cvar_Get( "cl_showpos", "0", FCVAR_ARCHIVE, "show local player position and velocity" );
 	viewmodel_fov = Cvar_Get("viewmodel_fov", "60", FCVAR_ARCHIVE, "FOV for rendering view models (clientside only).");
 

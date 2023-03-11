@@ -66,7 +66,7 @@ wavdata_t *FS_LoadSound( const char *filename, const byte *buffer, size_t size )
 	Sound_Reset(); // clear old sounddata
 	Q_strncpy( loadname, filename, sizeof( loadname ));
 
-	if( Q_stricmp( ext, "" ))
+	if( COM_CheckStringEmpty( ext ))
 	{
 		// we needs to compare file extension with list of supported formats
 		// and be sure what is real extension, not a filename with dot
@@ -155,7 +155,7 @@ stream_t *FS_OpenStream( const char *filename )
 	Sound_Reset(); // clear old streaminfo
 	Q_strncpy( loadname, filename, sizeof( loadname ));
 
-	if( Q_stricmp( ext, "" ))
+	if( COM_CheckStringEmpty( ext ))
 	{
 		// we needs to compare file extension with list of supported formats
 		// and be sure what is real extension, not a filename with dot
@@ -278,3 +278,25 @@ void FS_FreeStream( stream_t *stream )
 
 	stream->format->freefunc( stream );
 }
+
+#if XASH_ENGINE_TESTS
+
+#define IMPLEMENT_SOUNDLIB_FUZZ_TARGET( export, target ) \
+int EXPORT export( const uint8_t *Data, size_t Size ) \
+{ \
+	wavdata_t *wav; \
+	host.type = HOST_NORMAL; \
+	Memory_Init(); \
+	Sound_Init(); \
+	if( target( "#internal", Data, Size )) \
+	{ \
+		wav = SoundPack(); \
+		FS_FreeSound( wav ); \
+	} \
+	Sound_Shutdown(); \
+	return 0; \
+} \
+
+IMPLEMENT_SOUNDLIB_FUZZ_TARGET( Fuzz_Sound_LoadMPG, Sound_LoadMPG )
+IMPLEMENT_SOUNDLIB_FUZZ_TARGET( Fuzz_Sound_LoadWAV, Sound_LoadWAV )
+#endif

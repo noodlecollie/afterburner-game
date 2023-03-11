@@ -48,7 +48,7 @@ short GAME_EXPORT R_LookupColor( byte r, byte g, byte b )
 	float	rf, gf, bf;
 
 	bestdiff = 999999;
-	best = 65535;
+	best = -1;
 
 	for( i = 0; i < 256; i++ )
 	{
@@ -515,19 +515,19 @@ void CL_ReadLineFile_f( void )
 
 	while( 1 )
 	{
-		pfile = COM_ParseFile( pfile, token );
+		pfile = COM_ParseFile( pfile, token, sizeof( token ));
 		if( !pfile ) break;
 		p1[0] = Q_atof( token );
 
-		pfile = COM_ParseFile( pfile, token );
+		pfile = COM_ParseFile( pfile, token, sizeof( token ));
 		if( !pfile ) break;
 		p1[1] = Q_atof( token );
 
-		pfile = COM_ParseFile( pfile, token );
+		pfile = COM_ParseFile( pfile, token, sizeof( token ));
 		if( !pfile ) break;
 		p1[2] = Q_atof( token );
 
-		pfile = COM_ParseFile( pfile, token );
+		pfile = COM_ParseFile( pfile, token, sizeof( token ));
 		if( !pfile ) break;
 
 		if( token[0] != '-' )
@@ -536,15 +536,15 @@ void CL_ReadLineFile_f( void )
 			break;
 		}
 
-		pfile = COM_ParseFile( pfile, token );
+		pfile = COM_ParseFile( pfile, token, sizeof( token ));
 		if( !pfile ) break;
 		p2[0] = Q_atof( token );
 
-		pfile = COM_ParseFile( pfile, token );
+		pfile = COM_ParseFile( pfile, token, sizeof( token ));
 		if( !pfile ) break;
 		p2[1] = Q_atof( token );
 
-		pfile = COM_ParseFile( pfile, token );
+		pfile = COM_ParseFile( pfile, token, sizeof( token ));
 		if( !pfile ) break;
 		p2[2] = Q_atof( token );
 
@@ -685,42 +685,46 @@ void CL_ParseViewBeam( sizebuf_t *msg, int beamType )
 	switch( beamType )
 	{
 	case TE_BEAMPOINTS:
-		start[0] = MSG_ReadCoord( msg );
-		start[1] = MSG_ReadCoord( msg );
-		start[2] = MSG_ReadCoord( msg );
-		end[0] = MSG_ReadCoord( msg );
-		end[1] = MSG_ReadCoord( msg );
-		end[2] = MSG_ReadCoord( msg );
-		modelIndex = MSG_ReadShort( msg );
-		startFrame = MSG_ReadByte( msg );
-		frameRate = (float)MSG_ReadByte( msg );
-		life = (float)(MSG_ReadByte( msg ) * 0.1f);
-		width = (float)(MSG_ReadByte( msg ) * 0.1f);
-		noise = (float)(MSG_ReadByte( msg ) * 0.01f);
-		r = (float)MSG_ReadByte( msg ) / 255.0f;
-		g = (float)MSG_ReadByte( msg ) / 255.0f;
-		b = (float)MSG_ReadByte( msg ) / 255.0f;
-		a = (float)MSG_ReadByte( msg ) / 255.0f;
-		speed = (float)(MSG_ReadByte( msg ) * 0.1f);
-		R_BeamPoints( start, end, modelIndex, life, width, noise, a, speed, startFrame, frameRate, r, g, b );
-		break;
 	case TE_BEAMENTPOINT:
-		startEnt = MSG_ReadShort( msg );
-		end[0] = MSG_ReadCoord( msg );
-		end[1] = MSG_ReadCoord( msg );
-		end[2] = MSG_ReadCoord( msg );
+	case TE_BEAMENTS:
+		if( beamType == TE_BEAMENTS )
+		{
+			startEnt = MSG_ReadShort( msg );
+			endEnt = MSG_ReadShort( msg );
+		}
+		else
+		{
+			if( beamType == TE_BEAMENTPOINT )
+			{
+				startEnt = MSG_ReadShort( msg );
+			}
+			else
+			{
+				start[0] = MSG_ReadCoord( msg );
+				start[1] = MSG_ReadCoord( msg );
+				start[2] = MSG_ReadCoord( msg );
+			}
+			end[0] = MSG_ReadCoord( msg );
+			end[1] = MSG_ReadCoord( msg );
+			end[2] = MSG_ReadCoord( msg );
+		}
 		modelIndex = MSG_ReadShort( msg );
 		startFrame = MSG_ReadByte( msg );
-		frameRate = (float)MSG_ReadByte( msg );
-		life = (float)(MSG_ReadByte( msg ) * 0.1f);
-		width = (float)(MSG_ReadByte( msg ) * 0.1f);
-		noise = (float)(MSG_ReadByte( msg ) * 0.01f);
+		frameRate = (float)MSG_ReadByte( msg ) * 0.1f;
+		life = (float)MSG_ReadByte( msg ) * 0.1f;
+		width = (float)MSG_ReadByte( msg ) * 0.1f;
+		noise = (float)MSG_ReadByte( msg ) * 0.01f;
 		r = (float)MSG_ReadByte( msg ) / 255.0f;
 		g = (float)MSG_ReadByte( msg ) / 255.0f;
 		b = (float)MSG_ReadByte( msg ) / 255.0f;
 		a = (float)MSG_ReadByte( msg ) / 255.0f;
-		speed = (float)(MSG_ReadByte( msg ) * 0.1f);
-		R_BeamEntPoint( startEnt, end, modelIndex, life, width, noise, a, speed, startFrame, frameRate, r, g, b );
+		speed = (float)MSG_ReadByte( msg ) * 0.1f;
+		if( beamType == TE_BEAMENTS )
+			R_BeamEnts( startEnt, endEnt, modelIndex, life, width, noise, a, speed, startFrame, frameRate, r, g, b );
+		else if( beamType == TE_BEAMENTPOINT )
+			R_BeamEntPoint( startEnt, end, modelIndex, life, width, noise, a, speed, startFrame, frameRate, r, g, b );
+		else
+			R_BeamPoints( start, end, modelIndex, life, width, noise, a, speed, startFrame, frameRate, r, g, b );
 		break;
 	case TE_LIGHTNING:
 		start[0] = MSG_ReadCoord( msg );
@@ -729,27 +733,11 @@ void CL_ParseViewBeam( sizebuf_t *msg, int beamType )
 		end[0] = MSG_ReadCoord( msg );
 		end[1] = MSG_ReadCoord( msg );
 		end[2] = MSG_ReadCoord( msg );
-		life = (float)(MSG_ReadByte( msg ) * 0.1f);
-		width = (float)(MSG_ReadByte( msg ) * 0.1f);
-		noise = (float)(MSG_ReadByte( msg ) * 0.01f);
+		life = (float)MSG_ReadByte( msg ) * 0.1f;
+		width = (float)MSG_ReadByte( msg ) * 0.1f;
+		noise = (float)MSG_ReadByte( msg ) * 0.01f;
 		modelIndex = MSG_ReadShort( msg );
-		R_BeamLightning( start, end, modelIndex, life, width, noise, 0.6F, 3.5f );
-		break;
-	case TE_BEAMENTS:
-		startEnt = MSG_ReadShort( msg );
-		endEnt = MSG_ReadShort( msg );
-		modelIndex = MSG_ReadShort( msg );
-		startFrame = MSG_ReadByte( msg );
-		frameRate = (float)(MSG_ReadByte( msg ) * 0.1f);
-		life = (float)(MSG_ReadByte( msg ) * 0.1f);
-		width = (float)(MSG_ReadByte( msg ) * 0.1f);
-		noise = (float)(MSG_ReadByte( msg ) * 0.01f);
-		r = (float)MSG_ReadByte( msg ) / 255.0f;
-		g = (float)MSG_ReadByte( msg ) / 255.0f;
-		b = (float)MSG_ReadByte( msg ) / 255.0f;
-		a = (float)MSG_ReadByte( msg ) / 255.0f;
-		speed = (float)(MSG_ReadByte( msg ) * 0.1f);
-		R_BeamEnts( startEnt, endEnt, modelIndex, life, width, noise, a, speed, startFrame, frameRate, r, g, b );
+		R_BeamLightning( start, end, modelIndex, life, width, noise, 0.6f, 3.5f );
 		break;
 	case TE_BEAM:
 		break;
@@ -775,21 +763,21 @@ void CL_ParseViewBeam( sizebuf_t *msg, int beamType )
 		end[2] = MSG_ReadCoord( msg );
 		modelIndex = MSG_ReadShort( msg );
 		startFrame = MSG_ReadByte( msg );
-		frameRate = (float)(MSG_ReadByte( msg ));
-		life = (float)(MSG_ReadByte( msg ) * 0.1f);
-		width = (float)(MSG_ReadByte( msg ));
-		noise = (float)(MSG_ReadByte( msg ) * 0.1f);
+		frameRate = (float)MSG_ReadByte( msg ) * 0.1f;
+		life = (float)MSG_ReadByte( msg ) * 0.1f;
+		width = (float)MSG_ReadByte( msg );
+		noise = (float)MSG_ReadByte( msg ) * 0.01f;
 		r = (float)MSG_ReadByte( msg ) / 255.0f;
 		g = (float)MSG_ReadByte( msg ) / 255.0f;
 		b = (float)MSG_ReadByte( msg ) / 255.0f;
 		a = (float)MSG_ReadByte( msg ) / 255.0f;
-		speed = (float)(MSG_ReadByte( msg ) / 0.1f);
+		speed = (float)MSG_ReadByte( msg ) * 0.1f;
 		R_BeamCirclePoints( beamType, start, end, modelIndex, life, width, noise, a, speed, startFrame, frameRate, r, g, b );
 		break;
 	case TE_BEAMFOLLOW:
 		startEnt = MSG_ReadShort( msg );
 		modelIndex = MSG_ReadShort( msg );
-		life = (float)(MSG_ReadByte( msg ) * 0.1f);
+		life = (float)MSG_ReadByte( msg ) * 0.1f;
 		width = (float)MSG_ReadByte( msg );
 		r = (float)MSG_ReadByte( msg ) / 255.0f;
 		g = (float)MSG_ReadByte( msg ) / 255.0f;
@@ -802,15 +790,15 @@ void CL_ParseViewBeam( sizebuf_t *msg, int beamType )
 		endEnt = MSG_ReadShort( msg );
 		modelIndex = MSG_ReadShort( msg );
 		startFrame = MSG_ReadByte( msg );
-		frameRate = (float)MSG_ReadByte( msg );
-		life = (float)(MSG_ReadByte( msg ) * 0.1f);
-		width = (float)(MSG_ReadByte( msg ) * 0.1f);
-		noise = (float)(MSG_ReadByte( msg ) * 0.01f);
+		frameRate = (float)MSG_ReadByte( msg ) * 0.1f;
+		life = (float)MSG_ReadByte( msg ) * 0.1f;
+		width = (float)MSG_ReadByte( msg ) * 0.1f;
+		noise = (float)MSG_ReadByte( msg ) * 0.01f;
 		r = (float)MSG_ReadByte( msg ) / 255.0f;
 		g = (float)MSG_ReadByte( msg ) / 255.0f;
 		b = (float)MSG_ReadByte( msg ) / 255.0f;
 		a = (float)MSG_ReadByte( msg ) / 255.0f;
-		speed = (float)(MSG_ReadByte( msg ) * 0.1f);
+		speed = (float)MSG_ReadByte( msg ) * 0.1f;
 		R_BeamRing( startEnt, endEnt, modelIndex, life, width, noise, a, speed, startFrame, frameRate, r, g, b );
 		break;
 	case TE_BEAMHOSE:
@@ -1125,8 +1113,12 @@ R_ParticleExplosion2
 void GAME_EXPORT R_ParticleExplosion2( const vec3_t org, int colorStart, int colorLength )
 {
 	int		i, j;
-	int		colorMod = 0;
+	int		colorMod = 0, packedColor;
 	particle_t	*p;
+
+	if( FBitSet( host.features, ENGINE_QUAKE_COMPATIBLE ))
+		packedColor = 255; // use old code for blob particles
+	else packedColor = 0;
 
 	for( i = 0; i < 512; i++ )
 	{
@@ -1135,7 +1127,7 @@ void GAME_EXPORT R_ParticleExplosion2( const vec3_t org, int colorStart, int col
 
 		p->die = cl.time + 0.3f;
 		p->color = colorStart + ( colorMod % colorLength );
-		p->packedColor = 255; // use old code for blob particles
+		p->packedColor = packedColor;
 		colorMod++;
 
 		p->type = pt_blob;
@@ -1157,15 +1149,19 @@ R_BlobExplosion
 void GAME_EXPORT R_BlobExplosion( const vec3_t org )
 {
 	particle_t	*p;
-	int		i, j;
+	int		i, j, packedColor;
+
+	if( FBitSet( host.features, ENGINE_QUAKE_COMPATIBLE ))
+		packedColor = 255; // use old code for blob particles
+	else packedColor = 0;
 
 	for( i = 0; i < 1024; i++ )
 	{
 		p = R_AllocParticle( NULL );
 		if( !p ) return;
 
-		p->die = cl.time + COM_RandomFloat( 2.0f, 2.4f );
-		p->packedColor = 255; // use old code for blob particles
+		p->die = cl.time + COM_RandomFloat( 1.0f, 1.4f );
+		p->packedColor = packedColor;
 
 		if( i & 1 )
 		{
@@ -1267,7 +1263,7 @@ void GAME_EXPORT R_BloodStream( const vec3_t org, const vec3_t dir, int pcolor, 
 	particle_t	*p;
 	int		i, j;
 	float		arc;
-	float		accel = speed;
+	int		accel = speed; // must be integer due to bug in GoldSrc
 
 	for( arc = 0.05f, i = 0; i < 100; i++ )
 	{
@@ -2113,15 +2109,15 @@ void CL_ReadPointFile_f( void )
 
 	while( 1 )
 	{
-		pfile = COM_ParseFile( pfile, token );
+		pfile = COM_ParseFile( pfile, token, sizeof( token ));
 		if( !pfile ) break;
 		org[0] = Q_atof( token );
 
-		pfile = COM_ParseFile( pfile, token );
+		pfile = COM_ParseFile( pfile, token, sizeof( token ));
 		if( !pfile ) break;
 		org[1] = Q_atof( token );
 
-		pfile = COM_ParseFile( pfile, token );
+		pfile = COM_ParseFile( pfile, token, sizeof( token ));
 		if( !pfile ) break;
 		org[2] = Q_atof( token );
 

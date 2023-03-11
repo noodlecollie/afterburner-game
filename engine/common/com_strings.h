@@ -21,6 +21,7 @@ GNU General Public License for more details.
 #define S_WARN			"^3Warning:^7 "
 #define S_ERROR			"^1Error:^7 "
 #define S_USAGE			"Usage: "
+#define S_USAGE_INDENT  "       "
 
 #define S_OPENGL_NOTE		"^2OpenGL Note:^7 "
 #define S_OPENGL_WARN		"^3OpenGL Warning:^7 "
@@ -75,6 +76,8 @@ GNU General Public License for more details.
 #define DEFAULT_UPDATE_PAGE "https://github.com/FWGS/xash3d-fwgs/releases/latest"
 
 #define XASH_ENGINE_NAME "Xash3D FWGS"
+#define XASH_VERSION        "0.20" // engine current version
+#define XASH_COMPAT_VERSION "0.99" // version we are based on
 
 // renderers order is important, software is always a last chance fallback
 #define DEFAULT_RENDERERS { "gl", "gles1", "gles2", "gl4es", "soft" }
