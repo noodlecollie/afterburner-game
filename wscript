@@ -27,9 +27,6 @@ class Subproject:
 		if self.fnFilter:
 			return self.fnFilter(ctx)
 
-		if self.utility and not ctx.env.ENABLE_UTILS:
-			return False
-
 		return True
 
 SUBDIRS = [
