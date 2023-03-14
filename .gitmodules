@@ -17,3 +17,6 @@
 [submodule "3rdparty/xash-extras"]
 	path = 3rdparty/extras/xash-extras
 	url = https://github.com/FWGS/xash-extras
+[submodule "3rdparty/mainui"]
+	path = 3rdparty/mainui
+	url = https://github.com/noodlecollie/afterburner-menus
