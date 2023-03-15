@@ -1961,10 +1961,10 @@ static void LoadTexture(dbspmodel_t* bmod, const int32_t* miptexOffsets, uint32_
 	tx->width = mt->width;
 	tx->height = mt->height;
 
-    if( FBitSet( host.features, ENGINE_IMPROVED_LINETRACE ) && mt->name[0] == '{' )
-    {
-        SetBits( txFlags, TF_KEEP_SOURCE ); // Paranoia2 texture alpha-tracing
-    }
+	if( FBitSet( host.features, ENGINE_IMPROVED_LINETRACE ) && mt->name[0] == '{' )
+	{
+		SetBits( txFlags, TF_KEEP_SOURCE ); // Paranoia2 texture alpha-tracing
+	}
 
 	if( mt->offsets[0] > 0 )
 	{
@@ -2031,7 +2031,7 @@ static void LoadTexture(dbspmodel_t* bmod, const int32_t* miptexOffsets, uint32_
 
 				if( FS_FileExists( texpath, false ))
 				{
-					tx->gl_texturenum = ref.dllFuncs.GL_LoadTexture( texpath, NULL, 0, TF_ALLOW_EMBOSS | txFlags );
+					tx->gl_texturenum = ref.dllFuncs.GL_LoadTexture( texpath, NULL, 0, txFlags );
 					bmod->wadlist.wadusage[wadIndex]++;
 					break;
 				}
@@ -2051,7 +2051,7 @@ static void LoadTexture(dbspmodel_t* bmod, const int32_t* miptexOffsets, uint32_
 			}
 
 			Q_snprintf( texname, sizeof( texname ), "#%s:%s.mip", loadstat.name, mt->name );
-			tx->gl_texturenum = ref.dllFuncs.GL_LoadTexture( texname, (byte *)mt, size, TF_ALLOW_EMBOSS | txFlags );
+			tx->gl_texturenum = ref.dllFuncs.GL_LoadTexture( texname, (byte *)mt, size, txFlags );
 		}
 
 		// if texture is completely missed
@@ -2318,7 +2318,7 @@ static void LoadTextureProperties(texture_t* out, const char* propertiesFilePath
 		char key[32];
 		char value[32];
 
-		inText = COM_ParseFileSafe(inText, key, sizeof(key));
+		inText = COM_ParseFileSafe(inText, key, sizeof(key), 0, NULL, NULL);
 
 		if ( !inText )
 		{
@@ -2326,7 +2326,7 @@ static void LoadTextureProperties(texture_t* out, const char* propertiesFilePath
 			break;
 		}
 
-		inText = COM_ParseFileSafe(inText, value, sizeof(value));
+		inText = COM_ParseFileSafe(inText, value, sizeof(value), 0, NULL, NULL);
 
 		if ( !inText )
 		{

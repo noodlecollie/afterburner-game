@@ -15,7 +15,7 @@ GNU General Public License for more details.
 
 #include "model_dump.h"
 #include "common.h"
-#include "viscompress.h"
+#include "bsp/generic/viscompress.h"
 #include "mathlib.h"
 #include <stdint.h>
 
@@ -352,7 +352,7 @@ static void DumpGeneralModelData(const model_t* model)
 	WRITELF("Needs load: %s", BoolString(model->needload));
 	WRITELF("Type: " FMT_ENUM, ARG_ENUM(String_modtype_t, model->type));
 	WRITELF("Num frames: %d", model->numframes);
-	WRITELF("Valid mempool: %s", BoolString(model->mempool));
+	WRITELF("Valid mempool: %s", BoolString((qboolean)model->mempool));
 	WRITELF("Flags: " FMT_HEX_INT, model->flags);
 	WRITELF("Bounds: " FMT_BOUNDS, ARG_BOUNDS(model->mins, model->maxs));
 WRITELF("Radius: %f", model->radius);

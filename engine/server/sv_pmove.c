@@ -399,7 +399,7 @@ static float GAME_EXPORT pfnTraceModel( physent_t *pe, float *start, float *end,
 	return PM_TraceModel( svgame.pmove, pe, start, end, trace );
 }
 
-static texture_t *pfnTraceTexture( int ground, float *vstart, float *vend )
+static texture_t *pfnTraceTexture( int ground, const float *vstart, const float *vend )
 {
 	return PM_TraceTexture( svgame.pmove, ground, vstart, vend );
 }

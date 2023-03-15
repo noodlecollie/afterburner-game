@@ -24,7 +24,7 @@ GNU General Public License for more details.
 #include "vid_common.h"
 #include "pm_local.h"
 #include "model_dump.h"
-#include "viscompress.h"
+#include "common/bsp/generic/viscompress.h"
 
 #define MAX_TOTAL_CMDS		32
 #define MAX_CMD_BUFFER		8000

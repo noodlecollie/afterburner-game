@@ -841,7 +841,7 @@ pmtrace_t *PM_TraceLineEx( playermove_t *pmove, float *start, float *end, int fl
 	return &tr;
 }
 
-struct msurface_s *PM_TraceSurfacePmove( playermove_t *pmove, int ground, float *vstart, float *vend )
+struct msurface_s *PM_TraceSurfacePmove( playermove_t *pmove, int ground, const float *vstart, const float *vend )
 {
 	if( ground < 0 || ground >= pmove->numphysent )
 		return NULL; // bad ground
@@ -849,19 +849,23 @@ struct msurface_s *PM_TraceSurfacePmove( playermove_t *pmove, int ground, float 
 	return PM_TraceSurface( &pmove->physents[ground], vstart, vend );
 }
 
-const char *PM_TraceTexture( playermove_t *pmove, int ground, float *vstart, float *vend )
+texture_t* PM_TraceTexture( playermove_t *pmove, int ground, const float *vstart, const float *vend )
 {
 	msurface_t *surf;
 
 	if( ground < 0 || ground >= pmove->numphysent )
+	{
 		return NULL; // bad ground
+	}
 
 	surf = PM_TraceSurface( &pmove->physents[ground], vstart, vend );
 
 	if( !surf || !surf->texinfo || !surf->texinfo->texture )
+	{
 		return NULL;
+	}
 
-	return surf->texinfo->texture->name;
+	return surf->texinfo->texture;
 }
 
 int PM_PointContentsPmove( playermove_t *pmove, const float *p, int *truecontents )

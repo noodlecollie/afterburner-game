@@ -225,7 +225,7 @@ typedef struct playermove_s
 	// Run functions for this frame?
 	qboolean		runfuncs;
 	void		(*PM_PlaySound)( int channel, const char *sample, float volume, float attenuation, int fFlags, int pitch );
-	texture_t	*(*PM_TraceTexture)( int ground, float *vstart, float *vend );
+	texture_t	*(*PM_TraceTexture)( int ground, const float *vstart, const float *vend );
 	void		(*PM_PlaybackEventFull)( const struct pm_event_fire_args_s* inArgs );
 	pmtrace_t		(*PM_PlayerTraceEx) (float *start, float *end, int traceFlags, int (*pfnIgnore)( physent_t *pe ));
 	int		(*PM_TestPlayerPositionEx) (float *pos, pmtrace_t *ptrace, int (*pfnIgnore)( physent_t *pe ));

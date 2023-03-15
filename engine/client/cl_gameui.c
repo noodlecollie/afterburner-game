@@ -1137,7 +1137,6 @@ static ui_enginefuncs_t gEngfuncs =
 	pfnClientJoin,
 	COM_LoadFileForMe,
 	pfnParseFile,
-	pfnParseFileSafe,
 	COM_FreeFile,
 	Key_ClearStates,
 	Key_SetKeyDest,

@@ -53,7 +53,8 @@ typedef struct cldll_func_src_s
 	int	(*pfnGetHullBounds)( int hullnumber, float *mins, float *maxs );
 	void	(*pfnFrame)( double time );
 	int	(*pfnKey_Event)( int eventcode, int keynum, const char *pszCurrentBinding );
-	void	(*pfnTempEntUpdate)( double frametime, double client_time, double cl_gravity, struct tempent_s **ppTempEntFree, struct tempent_s **ppTempEntActive, int ( *Callback_AddVisibleEntity )( cl_entity_t *pEntity ), void ( *Callback_TempEntPlaySound )( struct tempent_s *pTemp, float damp ));
+	// NOODLECOLLIE: Removed extra function pointer at the end of this that is currently unused, to eliminate warnings.
+	void	(*pfnTempEntUpdate)( double frametime, double client_time, double cl_gravity, struct tempent_s **ppTempEntFree, struct tempent_s **ppTempEntActive, int ( *Callback_AddVisibleEntity )( cl_entity_t *pEntity )/*, void ( *Callback_TempEntPlaySound )( struct tempent_s *pTemp, float damp )*/);
 	cl_entity_t *(*pfnGetUserEntity)( int index );
 	void	(*pfnVoiceStatus)( int entindex, qboolean bTalking );
 	void	(*pfnDirectorMessage)( int iSize, void *pbuf );
@@ -100,7 +101,8 @@ typedef struct cldll_func_dst_s
 	void	(*pfnGetHullBounds)( int *hullnumber, float **mins, float **maxs );
 	void	(*pfnFrame)( double *time );
 	void	(*pfnKey_Event)( int *eventcode, int *keynum, const char **pszCurrentBinding );
-	void	(*pfnTempEntUpdate)( double *frametime, double *client_time, double *cl_gravity, struct tempent_s ***ppTempEntFree, struct tempent_s ***ppTempEntActive, int ( **Callback_AddVisibleEntity )( cl_entity_t *pEntity ), void ( **Callback_TempEntPlaySound )( struct tempent_s *pTemp, float damp ));
+	// NOODLECOLLIE: Removed extra function pointer at the end of this that is currently unused, to eliminate warnings.
+	void	(*pfnTempEntUpdate)( double *frametime, double *client_time, double *cl_gravity, struct tempent_s ***ppTempEntFree, struct tempent_s ***ppTempEntActive, int ( **Callback_AddVisibleEntity )( cl_entity_t *pEntity )/*, void ( **Callback_TempEntPlaySound )( struct tempent_s *pTemp, float damp )*/);
 	void	(*pfnGetUserEntity)( int *index );
 	void	(*pfnVoiceStatus)( int *entindex, qboolean *bTalking );
 	void	(*pfnDirectorMessage)( int *iSize, void **pbuf );
@@ -405,12 +407,15 @@ static cldll_func_dst_t cldllFuncDst =
 
 void CL_GetSecuredClientAPI( CL_EXPORT_FUNCS F )
 {
-	cldll_func_src_t cldllFuncSrc = { 0 };
 	modfuncs_t modFuncs = { 0 };
 
 	// secured client dlls need these
-	*(cldll_func_dst_t **)&cldllFuncSrc.pfnVidInit = &cldllFuncDst;
-	*(modfuncs_t **)&cldllFuncSrc.pfnInitialize = &modFuncs;
+	cldll_func_src_t cldllFuncSrc =
+	{
+		(void *)&modFuncs,
+		NULL,
+		(void *)&cldllFuncDst
+	};
 
 	// trying to fill interface now
 	F( &cldllFuncSrc );

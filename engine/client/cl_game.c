@@ -3065,17 +3065,6 @@ char *pfnParseFile( char *data, char *token )
 	return COM_ParseFileSafe( data, token, PFILE_TOKEN_MAX_LENGTH, PFILE_HANDLECOLON, NULL, NULL );
 }
 
-char *pfnParseFileSafe( char *data, char *token, size_t tokenLength )
-{
-	char	*out;
-
-	host.com_handlecolon = true;
-	out = COM_ParseFileSafe( data, token, tokenLength );
-	host.com_handlecolon = false;
-
-	return out;
-}
-
 /*
 =================
 TriAPI implementation
@@ -3827,7 +3816,6 @@ static cl_enginefunc_t gEngfuncs =
 	VGui_ViewportPaintBackground,
 	COM_LoadFile,
 	pfnParseFile,
-	pfnParseFileSafe,
 	COM_FreeFile,
 	&gTriApi,
 	&gEfxApi,
