@@ -2350,7 +2350,7 @@ static void LoadTextureProperties(texture_t* out, const char* propertiesFilePath
 
 static void LoadPNGTexture(const dpngtexturepath_t* in, texture_t** out)
 {
-	char nameBuffer[96];
+	char nameBuffer[MAX_OSPATH];
 	byte* pngData = NULL;
 	fs_offset_t pngDataSize = 0;
 
@@ -2369,7 +2369,7 @@ static void LoadPNGTexture(const dpngtexturepath_t* in, texture_t** out)
 		return;
 	}
 
-	Q_snprintf(nameBuffer, sizeof(nameBuffer), "%s.png", in->path);
+	Q_snprintf(nameBuffer, sizeof(nameBuffer), "%s%s.png", DEFAULT_TEXTURE_DIR_PATH, in->path);
 
 	if ( !LoadPNGTextureData(in, out, nameBuffer) )
 	{
@@ -2377,7 +2377,7 @@ static void LoadPNGTexture(const dpngtexturepath_t* in, texture_t** out)
 		return;
 	}
 
-	Q_snprintf(nameBuffer, sizeof(nameBuffer), "%s.props", in->path);
+	Q_snprintf(nameBuffer, sizeof(nameBuffer), "%s%s.props", DEFAULT_TEXTURE_DIR_PATH, in->path);
 	LoadTextureProperties(*out, nameBuffer);
 }
 

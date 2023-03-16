@@ -69,6 +69,8 @@ GNU General Public License for more details.
 // playlist for startup videos
 #define DEFAULT_VIDEOLIST_PATH	"media/StartupVids.txt"
 
+#define DEFAULT_TEXTURE_DIR_PATH "textures/"
+
 #define CVAR_GLCONFIG_DESCRIPTION	"enable or disable %s"
 
 #define DEFAULT_BSP_BUILD_ERROR	"%s can't be loaded in this build. Please rebuild engine with enabled SUPPORT_BSP2_FORMAT\n"
