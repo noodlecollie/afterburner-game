@@ -19,6 +19,13 @@ GNU General Public License for more details.
 #define HPAK_MAX_ENTRIES	0x8000
 #define HPAK_ENTRY_MIN_SIZE	(512)
 #define HPAK_ENTRY_MAX_SIZE	(128 * 1024)
+#define HPAK_SENTINEL 0xDEADBEEF
+
+#ifdef XASH_64BIT
+#define HPAK_SENTINEL_PTR ((void*)0xDEADBEEFDEADBEEF)
+#else
+#define HPAK_SENTINEL_PTR ((void*)0xDEADBEEF)
+#endif
 
 typedef struct hash_pack_queue_s
 {
@@ -52,13 +59,13 @@ const char *HPAK_TypeFromIndex( int type )
 static inline void HPAK_ResourceToCompat( dresource_t *dest, resource_t *src )
 {
 	memcpy( dest, src, sizeof( *dest ));
-	dest->pNext = dest->pPrev = 0xDEADBEEF;
+	dest->pNext = dest->pPrev = HPAK_SENTINEL;
 }
 
 static inline void HPAK_ResourceFromCompat( resource_t *dest, dresource_t *src )
 {
 	memcpy( dest, src, sizeof( *src ));
-	dest->pNext = dest->pPrev = (void*)0xDEADBEEF;
+	dest->pNext = dest->pPrev = HPAK_SENTINEL_PTR;
 }
 
 static void HPAK_AddToQueue( const char *name, resource_t *pResource, void *data, file_t *f )

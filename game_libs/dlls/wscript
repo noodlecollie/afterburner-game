@@ -171,18 +171,19 @@ def configure(conf):
 		conf.define("NO_VOICEGAMEMGR", 1)
 
 	if conf.env.COMPILER_CC == 'msvc':
+		defName = "hl_amd64.def" if conf.options.ALLOW64 else "conf.options.ALLOW64"
 		# hl.def removes MSVC function name decoration from GiveFnptrsToDll on Windows.
 		# Without this, the lookup for this function fails.
 		# I guess we could mark this as extern C, but for now we just use the .def file.
-		hlDefNode = conf.path.find_resource("./hl.def")
+		hlDefNode = conf.path.find_resource(f"./{defName}")
 
 		if hlDefNode is not None:
 			conf.env.append_unique('LINKFLAGS', f'/def:{hlDefNode.abspath()}')
 		else:
-			conf.fatal("Could not find hl.def")
+			conf.fatal(f"Could not find {defName}")
 
 	conf.env.SERVER_DIR = "dlls"
-	conf.env.SERVER_TARGET = "hl"
+	conf.env.SERVER_TARGET = "hl_amd64" if conf.options.ALLOW64 else "hl"
 
 	conf.env.append_unique("DEFINES", DEFINES)
 

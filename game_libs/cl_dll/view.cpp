@@ -1118,7 +1118,7 @@ void V_GetDirectedChasePosition(cl_entity_t *ent1, cl_entity_t *ent2,float *angl
 		// v_cameraMode = CAM_MODE_FOCUS;
 	}
 
-	if( ( ent2 == (cl_entity_t*)0xFFFFFFFF ) || ( ent1->player && ( ent1->curstate.solid == SOLID_NOT ) ) )
+	if( ( ent2 == (cl_entity_t*)(~0) ) || ( ent1->player && ( ent1->curstate.solid == SOLID_NOT ) ) )
 	{
 		// we have no second target or player just died
 		V_GetSingleTargetCam( ent1, angle, origin );
@@ -1187,7 +1187,7 @@ void V_GetChasePos( int target, float *cl_angles, float *origin, float *angles )
 			V_GetDirectedChasePosition( ent, gEngfuncs.GetEntityByIndex( g_iUser3 ),
 				angles, origin );
 		else
-			V_GetDirectedChasePosition( ent, (cl_entity_t*)0xFFFFFFFF,
+			V_GetDirectedChasePosition( ent, (cl_entity_t*)(~0),
 				angles, origin );
 	}
 	else

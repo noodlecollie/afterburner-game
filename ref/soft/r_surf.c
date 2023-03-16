@@ -1036,7 +1036,7 @@ surfcache_t     *D_SCAlloc (int width, int size)
 	if ((size <= 0) || (size > 0x10000000))
 		gEngfuncs.Host_Error ("D_SCAlloc: bad cache size %d\n", size);
 
-	size = (int)&((surfcache_t *)0)->data[size];
+	size = (int)((size_t)&((surfcache_t *)0)->data[size]);
 	size = (size + 3) & ~3;
 	if (size > sc_size)
 		gEngfuncs.Host_Error ("D_SCAlloc: %i > cache size of %i",size, sc_size);
@@ -1424,5 +1424,3 @@ surfcache_t *D_CacheSurface (msurface_t *surface, int miplevel)
 
 	return cache;
 }
-
-

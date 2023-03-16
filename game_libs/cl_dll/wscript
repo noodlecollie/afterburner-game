@@ -118,7 +118,7 @@ def configure(conf):
 	gamelib_common.configure(conf)
 
 	conf.env.CLIENT_DIR = "cl_dlls"
-	conf.env.CLIENT_TARGET = "client"
+	conf.env.CLIENT_TARGET = "client_amd64" if conf.options.ALLOW64 else "client"
 
 	conf.env.append_unique("DEFINES", DEFINES)
 
