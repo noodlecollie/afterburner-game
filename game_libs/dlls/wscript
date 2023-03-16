@@ -8,6 +8,8 @@ import sys
 
 top = '.'
 
+SERVER_BUILD_IDX = 54321
+
 DEFINES = \
 [
 	"GAME_LIBRARIES",	# Identifies that we're building for the client and server DLLs.
@@ -53,8 +55,7 @@ SOURCES = \
 	"dlls/screenOverlays/**/*.cpp",
 	"dlls/sound/**/*.cpp",
 
-	# TODO: Change the folder structure one day so that we can use globs and not have to do this.
-	# Currently we don't want to include absolutely everything...
+	# TODO: Work out which files we don't want here
 	"game_shared/weapons/**/*.cpp",
 	"game_shared/gameplay/**/*.cpp",
 	"game_shared/weaponattributes/**/*.cpp",
@@ -172,6 +173,7 @@ def configure(conf):
 	if conf.env.COMPILER_CC == 'msvc':
 		# hl.def removes MSVC function name decoration from GiveFnptrsToDll on Windows.
 		# Without this, the lookup for this function fails.
+		# I guess we could mark this as extern C, but for now we just use the .def file.
 		hlDefNode = conf.path.find_resource("./hl.def")
 
 		if hlDefNode is not None:
@@ -202,7 +204,7 @@ def build(bld):
 		use      = bld.env.USELIBS,
 		install_path = installPath,
 		subsystem = bld.env.MSVC_SUBSYSTEM,
-		idx      = bld.get_taskgen_count()
+		idx = SERVER_BUILD_IDX
 	)
 
 	if bld.env.DEST_OS == "linux":

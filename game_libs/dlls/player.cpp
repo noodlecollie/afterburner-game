@@ -47,6 +47,7 @@
 #include "com_model.h"
 #include "resources/SoundResources.h"
 #include "weapons/genericweapon.h"
+#include "com_strings.h"
 
 // #define DUCKFIX
 

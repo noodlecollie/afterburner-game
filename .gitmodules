@@ -20,3 +20,6 @@
 [submodule "3rdparty/mainui"]
 	path = 3rdparty/mainui
 	url = https://github.com/noodlecollie/afterburner-menus
+[submodule "game_libs/miniutl"]
+	path = game_libs/miniutl
+	url = https://github.com/FWGS/MiniUTL.git

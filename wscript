@@ -58,6 +58,11 @@ SUBDIRS = [
 
 	# enabled on PSVita only
 	Subproject('ref/gl/vgl_shim',   lambda x: x.env.DEST_OS == 'psvita'),
+
+	# Afterburner
+	Subproject("game_libs/cl_dll", lambda x: not x.env.DEDICATED),
+	Subproject("game_libs/dlls"),
+	Subproject("game_content")
 ]
 
 def options(opt):
@@ -66,7 +71,7 @@ def options(opt):
 	grp.add_option('-d', '--dedicated', action = 'store_true', dest = 'DEDICATED', default = False,
 		help = 'build Xash Dedicated Server [default: %default]')
 
-	grp.add_option('--gamedir', action = 'store', dest = 'GAMEDIR', default = 'valve',
+	grp.add_option('--gamedir', action = 'store', dest = 'GAMEDIR', default = 'afterburner',
 		help = 'engine default game directory [default: %default]')
 
 	grp.add_option('--single-binary', action = 'store_true', dest = 'SINGLE_BINARY', default = False,
@@ -211,7 +216,7 @@ def configure(conf):
 	conf.load('force_32bit')
 
 	compiler_optional_flags = [
-#		'-Wall', '-Wextra', '-Wpedantic',
+		'-Wall', '-Wextra', '-Wpedantic',
 		'-fdiagnostics-color=always',
 		'-Werror=return-type',
 		'-Werror=parentheses',

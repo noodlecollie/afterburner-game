@@ -25,7 +25,8 @@ def configure(conf):
 		[
 			"/WX",
 			"/wd4005",
-			"/wd4244"
+			"/wd4244",
+			"/EHsc"
 		])
 	else:
 		conf.env.append_unique("DEFINES",

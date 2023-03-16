@@ -133,7 +133,6 @@ typedef struct ui_enginefuncs_s
 	// parse txt files
 	byte*	(*COM_LoadFile)( const char *filename, int *pLength );
 	char*	(*COM_ParseFile)( char *data, char *token );
-	char*	(*COM_ParseFileSafe)( char* data, char* token, size_t tokenLength );
 	void	(*COM_FreeFile)( void *buffer );
 
 	// keyfuncs

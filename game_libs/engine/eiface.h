@@ -273,6 +273,9 @@ typedef struct enginefuncs_s
 	void	(*pfnQueryClientCvarValue2)( const edict_t *player, const char *cvarName, int requestID );
 	int	(*CheckParm)( char *parm, char **ppnext );
 
+	// added in 8279
+	edict_t* (*pfnPEntityOfEntIndexAllEntities)( int iEntIndex );
+
 	// Afterburner extensions begin here
 
 	float (*pfnModelSequenceDuration)( int modelIndex, int anim );

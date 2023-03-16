@@ -240,7 +240,6 @@ typedef struct cl_enginefuncs_s
 
 	byte*	(*COM_LoadFile)( const char *path, int usehunk, int *pLength );
 	char*	(*COM_ParseFile)( const char *data, const char *token );
-	char*	(*COM_ParseFileSafe)( char* data, char* token, size_t tokenLength );
 	void	(*COM_FreeFile)( void *buffer );
 
 	struct triangleapi_s	*pTriAPI;

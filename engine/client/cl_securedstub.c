@@ -324,7 +324,8 @@ static void DstKey_Event( int *eventcode, int *keynum, const char **pszCurrentBi
     // stub
 }
 
-static void DstTempEntUpdate( double *frametime, double *client_time, double *cl_gravity, struct tempent_s ***ppTempEntFree, struct tempent_s ***ppTempEntActive, int ( **Callback_AddVisibleEntity )( cl_entity_t *pEntity ), void ( **Callback_TempEntPlaySound )( struct tempent_s *pTemp, float damp ) )
+// NOODLECOLLIE: Removed extra function pointer at the end of this that is currently unused, to eliminate warnings.
+static void DstTempEntUpdate( double *frametime, double *client_time, double *cl_gravity, struct tempent_s ***ppTempEntFree, struct tempent_s ***ppTempEntActive, int ( **Callback_AddVisibleEntity )( cl_entity_t *pEntity )/*, void ( **Callback_TempEntPlaySound )( struct tempent_s *pTemp, float damp )*/ )
 {
     // stub
 }

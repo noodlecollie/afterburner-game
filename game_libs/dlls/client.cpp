@@ -43,6 +43,7 @@
 #include "prop_playercorpse.h"
 #include "gameplay/gameplaySystems.h"
 #include "resources/SoundResources.h"
+#include "com_strings.h"
 
 extern DLL_GLOBAL ULONG		g_ulModelIndexPlayer;
 extern DLL_GLOBAL BOOL		g_fGameOver;

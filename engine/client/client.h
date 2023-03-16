@@ -857,7 +857,7 @@ void CL_FillRGBA( int x, int y, int width, int height, int r, int g, int b, int 
 void CL_PlayerTrace( float *start, float *end, int traceFlags, int ignore_pe, pmtrace_t *tr );
 void CL_PlayerTraceExt( float *start, float *end, int traceFlags, int (*pfnIgnore)( physent_t *pe ), pmtrace_t *tr );
 pmtrace_t *PM_CL_TraceLine( float *start, float *end, int flags, int usehull, int ignore_pe );
-const char *PM_CL_TraceTexture( int ground, float *vstart, float *vend );
+texture_t* PM_CL_TraceTexture( int ground, const float *vstart, const float *vend );
 int PM_CL_PointContents( const float *p, int *truecontents );
 void CL_SetTraceHull( int hull );
 void CL_GetMousePosition( int *mx, int *my ); // TODO: move to input

@@ -24,6 +24,7 @@
 #include	"nodes_compat.h"
 #include	"animation.h"
 #include	"doors.h"
+#include	"com_strings.h"
 
 #define	HULL_STEP_SIZE 16// how far the test hull moves on each step
 #define	NODE_HEIGHT	8	// how high to lift nodes off the ground after we drop them all (make stair/ramp mapping easier)
