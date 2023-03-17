@@ -209,12 +209,12 @@ def configure(conf):
 		# hl.def removes MSVC function name decoration from GiveFnptrsToDll on Windows.
 		# Without this, the lookup for this function fails.
 		# I guess we could mark this as extern C, but for now we just use the .def file.
-		hlDefNode = conf.path.find_resource(f"./{defName}")
+		hlDefNode = conf.path.find_resource("./" + defName)
 
 		if hlDefNode is not None:
-			conf.env.append_unique('LINKFLAGS', f'/def:{hlDefNode.abspath()}')
+			conf.env.append_unique('LINKFLAGS', '/def:' + hlDefNode.abspath())
 		else:
-			conf.fatal(f"Could not find {defName}")
+			conf.fatal("Could not find " + defName)
 
 	conf.env.SERVER_DIR = "dlls"
 	conf.env.SERVER_TARGET = "hl_amd64" if conf.options.ALLOW64 else "hl"
