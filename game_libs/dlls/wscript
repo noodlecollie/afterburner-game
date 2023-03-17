@@ -205,7 +205,7 @@ def configure(conf):
 		conf.define("NO_VOICEGAMEMGR", 1)
 
 	if conf.env.COMPILER_CC == 'msvc':
-		defName = "hl_amd64.def" if conf.options.ALLOW64 else "conf.options.ALLOW64"
+		defName = "hl_amd64.def" if conf.options.ALLOW64 else "hl.def"
 		# hl.def removes MSVC function name decoration from GiveFnptrsToDll on Windows.
 		# Without this, the lookup for this function fails.
 		# I guess we could mark this as extern C, but for now we just use the .def file.
