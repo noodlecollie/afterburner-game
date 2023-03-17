@@ -221,7 +221,8 @@ def configure(conf):
 	conf.load('force_32bit')
 
 	compiler_optional_flags = [
-		'-Wall', '-Wextra', '-Wpedantic',
+		# NOODLECOLLIE: Commenting these out for now until I can fix things on Linux
+		#'-Wall', '-Wextra', '-Wpedantic',
 		'-fdiagnostics-color=always',
 		'-Werror=return-type',
 		'-Werror=parentheses',
