@@ -13,10 +13,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-18.04
+          - os: ubuntu-22.04
             targetos: linux
             targetarch: amd64
-          - os: ubuntu-18.04
+          - os: ubuntu-22.04
             targetos: linux
             targetarch: i386
 #          - os: ubuntu-aarch64-20.04
