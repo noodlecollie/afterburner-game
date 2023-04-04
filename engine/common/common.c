@@ -440,153 +440,11 @@ interpret symbol as whitespace
 ==============
 */
 
-static inline qboolean COM_IsWhiteSpace( char space )
+static int COM_IsWhiteSpace( char space )
 {
-	return space == ' ' || space == '\t' || space == '\r' || space == '\n';
-}
-
-static inline char* COM_SkipWhitespace(char* str)
-{
-	if ( !str )
-	{
-		return NULL;
-	}
-
-	while ( COM_IsWhiteSpace(*str) )
-	{
-		++str;
-	}
-
-	return str;
-}
-
-static inline char* COM_SkipLine(char* str)
-{
-	if ( !str )
-	{
-		return NULL;
-	}
-
-	while ( *str && *str != '\n' )
-	{
-		++str;
-	}
-
-	return str;
-}
-
-// Assumes token is valid.
-static inline void COM_WriteToToken(char* token, size_t length, char ch, uint32_t index, qboolean useLength)
-{
-	if ( !useLength )
-	{
-		// No checks.
-		token[index] = ch;
-	}
-	else if ( index < length )
-	{
-		// Enforce termination if we overflow.
-		token[index] = (index == length - 1) ? '\0' : ch;
-	}
-}
-
-static char* COM_ParseFileInternal(char* data, char* token, size_t tokenLength, qboolean useLength)
-{
-	int c = 0;
-	int len = 0;
-
-	if( !token || (useLength && tokenLength == 0) )
-	{
-		return NULL;
-	}
-
-	token[0] = 0;
-
-	if( !data )
-	{
-		return NULL;
-	}
-
-	while ( true )
-	{
-		data = COM_SkipWhitespace(data);
-
-		if ( !(*data) )
-		{
-			// End of file.
-			return NULL;
-		}
-
-		// If the next token is not a comment, we can progress.
-		// If it is, skip the comment and then go back to skip
-		// any more whitespace.
-		if ( !(data[0] == '/' && data[1] == '/') )
-		{
-			break;
-		}
-
-		data = COM_SkipLine(data);
-	}
-
-	c = *data;
-
-	// Handle quoted strings specially.
-	if ( c == '\"' )
-	{
-		data++;
-
-		while( true )
-		{
-			c = (byte)*data;
-
-			// unexpected line end
-			if ( !c )
-			{
-				COM_WriteToToken(token, tokenLength, '\0', len, useLength);
-				return data;
-			}
-
-			data++;
-
-			if ( c == '\"' )
-			{
-				COM_WriteToToken(token, tokenLength, '\0', len, useLength);
-				return data;
-			}
-
-			COM_WriteToToken(token, tokenLength, c, len, useLength);
-			len++;
-		}
-	}
-
-	// Parse single characters
-	if( COM_IsSingleChar( c ))
-	{
-		COM_WriteToToken(token, tokenLength, c, len, useLength);
-		len++;
-
-		COM_WriteToToken(token, tokenLength, '\0', len, useLength);
-		return data + 1;
-	}
-
-	// Parse a regular word
-	do
-	{
-		COM_WriteToToken(token, tokenLength, c, len, useLength);
-		data++;
-		len++;
-
-		c = ((byte)*data);
-
-		if ( COM_IsSingleChar(c))
-		{
-			break;
-		}
-	}
-	while( c > ' ' );
-
-	COM_WriteToToken(token, tokenLength, '\0', len, useLength);
-	return data;
+	if( space == ' ' || space == '\t' || space == '\r' || space == '\n' )
+		return 1;
+	return 0;
 }
 
 /*
@@ -1018,9 +876,7 @@ cvar_t *pfnCvar_RegisterClientVariable( const char *szName, const char *szValue,
 	if( !Q_stricmp( szName, "motdfile" ))
 		flags |= FCVAR_PRIVILEGED;
 
-	if( FBitSet( flags, FCVAR_GLCONFIG ))
-		return (cvar_t *)Cvar_Get( szName, szValue, flags, va( CVAR_GLCONFIG_DESCRIPTION, szName ));
-	return (cvar_t *)Cvar_Get( szName, szValue, flags|FCVAR_CLIENTDLL, Cvar_BuildAutoDescription( flags|FCVAR_CLIENTDLL ));
+	return (cvar_t *)Cvar_Get( szName, szValue, flags|FCVAR_CLIENTDLL, Cvar_BuildAutoDescription( szName, flags|FCVAR_CLIENTDLL ));
 }
 
 /*
@@ -1031,9 +887,7 @@ pfnCvar_RegisterVariable
 */
 cvar_t *pfnCvar_RegisterGameUIVariable( const char *szName, const char *szValue, int flags )
 {
-	if( FBitSet( flags, FCVAR_GLCONFIG ))
-		return (cvar_t *)Cvar_Get( szName, szValue, flags, va( CVAR_GLCONFIG_DESCRIPTION, szName ));
-	return (cvar_t *)Cvar_Get( szName, szValue, flags|FCVAR_GAMEUIDLL, Cvar_BuildAutoDescription( flags|FCVAR_GAMEUIDLL ));
+	return (cvar_t *)Cvar_Get( szName, szValue, flags|FCVAR_GAMEUIDLL, Cvar_BuildAutoDescription( szName, flags|FCVAR_GAMEUIDLL ));
 }
 
 /*
@@ -1173,6 +1027,21 @@ qboolean COM_IsSafeFileToDownload( const char *filename )
 	}
 
 	return true;
+}
+
+const char *COM_GetResourceTypeName( resourcetype_t restype )
+{
+	switch( restype )
+	{
+		case t_decal: return "decal";
+		case t_eventscript: return "eventscript";
+		case t_generic: return "generic";
+		case t_model: return "model";
+		case t_skin: return "skin";
+		case t_sound: return "sound";
+		case t_world: return "world";
+		default: return "unknown";
+	}
 }
 
 char *_copystring( poolhandle_t mempool, const char *s, const char *filename, int fileline )

@@ -965,7 +965,7 @@ void CL_SignonReply( void )
 
 float CL_LerpInterval( void )
 {
-	return max( cl_interp->value, 1.f / cl_updaterate->value );
+	return fmax( cl_interp->value, 1.f / cl_updaterate->value );
 }
 
 /*
