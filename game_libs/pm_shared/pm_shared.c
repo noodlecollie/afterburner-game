@@ -277,7 +277,7 @@ void PM_UpdateStepSound( void )
 		stepSoundId = PMRes_GetStepSoundIdForSurface(surfaceProp);
 		pmove->flTimeStepSound = isWalking ? 400 : 300;
 
-		fvol = fvol = isWalking ? 0.4 : 0.7;
+		fvol = isWalking ? 0.4 : 0.7;
 		fvol *= PMRes_GetStepSoundVolumeMultiplierForSurface(surfaceProp, isWalking);
 	}
 
