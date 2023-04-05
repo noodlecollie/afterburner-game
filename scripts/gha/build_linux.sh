@@ -2,11 +2,11 @@
 
 . scripts/lib.sh
 
-APP=xash3d-fwgs
+APP=afterburner
 APPDIR=$APP.AppDir
 APPIMAGE=$APP-$ARCH.AppImage
 
-DS=xashds-linux
+DS=afterburner-ds-linux
 DSDIR=$DS-$ARCH
 DSTARGZ=$DS-$ARCH.tar.gz
 
@@ -77,15 +77,15 @@ build_appimage()
 if [ "$XASH3D_BASEDIR" = "" ]; then
 	export XASH3D_BASEDIR=$PWD
 fi
-echo "Xash3D FWGS installed as AppImage."
+echo "Afterburner installed as AppImage."
 echo "Base directory is $XASH3D_BASEDIR. Set XASH3D_BASEDIR environment variable to override this"
 
 export XASH3D_EXTRAS_PAK1="${APPDIR}"/valve/extras.pk3
-${DEBUGGER} "${APPDIR}"/xash3d "$@"
+${DEBUGGER} "${APPDIR}"/afterburner "$@"
 exit $?
 EOF
 
-	chmod +x "$APPDIR"/xash3d "$APPDIR"/AppRun # Engine launcher & engine launcher script
+	chmod +x "$APPDIR"/afterburner "$APPDIR"/AppRun # Engine launcher & engine launcher script
 
 	echo "Contents of AppImage: "
 	ls -R "$APPDIR"
@@ -94,8 +94,8 @@ EOF
 
 	cat > "$APPDIR/$APP.desktop" <<EOF
 [Desktop Entry]
-Name=xash3d-fwgs
-Icon=xash3d-fwgs
+Name=afterburner
+Icon=afterburner
 Type=Application
 Exec=AppRun
 Categories=Game;
