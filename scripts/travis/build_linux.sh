@@ -2,7 +2,7 @@
 
 . scripts/lib.sh
 
-APP=xash3d-fwgs
+APP=afterburner
 APPDIR=$APP
 APPIMAGE=$APP-$ARCH.tar.xz
 
@@ -76,16 +76,16 @@ build_archive()
 if [ "$XASH3D_BASEDIR" = "" ]; then
 	export XASH3D_BASEDIR=$PWD
 fi
-echo "Xash3D FWGS installed as tarball."
+echo "Afterburner installed as tarball."
 echo "Base directory is $XASH3D_BASEDIR. Set XASH3D_BASEDIR environment variable to override this"
 
 export XASH3D_EXTRAS_PAK1="${XASH3D_BASEDIR}"/extras.pak
 export LD_LIBRARY_PATH="${XASH3D_BASEDIR}":$LD_LIBRARY_PATH
-${DEBUGGER} "${XASH3D_BASEDIR}"/xash3d "$@"
+${DEBUGGER} "${XASH3D_BASEDIR}"/afterburner "$@"
 exit $?
 EOF
 
-	chmod +x "$APPDIR"/xash3d "$APPDIR"/run.sh # Engine launcher & engine launcher script
+	chmod +x "$APPDIR"/afterburner "$APPDIR"/run.sh # Engine launcher & engine launcher script
 
 	echo "Contents of tarball: "
 	ls -R "$APPDIR"
@@ -95,7 +95,7 @@ EOF
 
 rm -rf build # clean-up build directory
 build_engine dedicated
-mv build/engine/xash xashds-linux-$ARCH
+mv build/engine/afterburner afterburner-ds-linux-$ARCH
 
 rm -rf build
 build_sdl2

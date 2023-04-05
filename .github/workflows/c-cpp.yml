@@ -71,7 +71,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - app: su.xash.Engine.Compat.i386
+          - app: su.Afterburner.Engine.Compat.i386
     container:
       image: bilelmoussaoui/flatpak-github-actions:freedesktop-22.08
       options: --privileged
@@ -103,7 +103,7 @@ jobs:
     - name: Repackage binaries
       run: |
         cd artifacts/
-        for i in artifact-* su.xash.Engine.*; do
+        for i in artifact-* su.Afterburner.Engine.*; do
           mv "$i"/* .
           rm -rf "$i"
         done
