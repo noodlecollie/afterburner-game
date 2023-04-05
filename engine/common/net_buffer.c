@@ -284,7 +284,7 @@ qboolean MSG_WriteBits( sizebuf_t *sb, const void *pData, int nBits )
 	int	nBitsLeft = nBits;
 
 	// get output dword-aligned.
-	while((( dword )pOut & 3 ) != 0 && nBitsLeft >= 8 )
+	while((( size_t )pOut & 3 ) != 0 && nBitsLeft >= 8 )
 	{
 		MSG_WriteUBitLong( sb, *pOut, 8 );
 
@@ -543,7 +543,7 @@ qboolean MSG_ReadBits( sizebuf_t *sb, void *pOutData, int nBits )
 	int	nBitsLeft = nBits;
 
 	// get output dword-aligned.
-	while((( dword )pOut & 3) != 0 && nBitsLeft >= 8 )
+	while((( size_t )pOut & 3) != 0 && nBitsLeft >= 8 )
 	{
 		*pOut = (byte)MSG_ReadUBitLong( sb, 8 );
 		++pOut;

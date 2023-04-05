@@ -133,7 +133,7 @@ static void Sys_StackTrace( PEXCEPTION_POINTERS pInfo )
 #error
 #endif
 	len += Q_snprintf( message + len, 1024 - len, "Sys_Crash: address %p, code %p\n",
-		pInfo->ExceptionRecord->ExceptionAddress, (void*)pInfo->ExceptionRecord->ExceptionCode );
+		pInfo->ExceptionRecord->ExceptionAddress, pInfo->ExceptionRecord->ExceptionCode );
 	if( SymGetLineFromAddr64( process, (DWORD64)pInfo->ExceptionRecord->ExceptionAddress, &dline, &line ) )
 	{
 		len += Q_snprintf(message + len, 1024 - len, "Exception: %s:%d:%d\n",
@@ -271,9 +271,9 @@ static long _stdcall Sys_Crash( PEXCEPTION_POINTERS pInfo )
 		if( Sys_CheckParm( "-minidumps" ))
 		{
 			int minidumpFlags = (
-				MiniDumpWithDataSegs | 
+				MiniDumpWithDataSegs |
 				MiniDumpWithCodeSegs |
-				MiniDumpWithHandleData | 
+				MiniDumpWithHandleData |
 				MiniDumpWithFullMemory |
 				MiniDumpWithFullMemoryInfo |
 				MiniDumpWithIndirectlyReferencedMemory |

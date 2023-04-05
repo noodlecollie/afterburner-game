@@ -39,6 +39,10 @@ static cvar_filter_quirks_t cvar_filter_quirks[] =
 		"ricochet",
 		"r_drawviewmodel",
 	},
+	{
+		"dod",
+		"cl_dodmusic" // Day of Defeat Beta 1.3 cvar
+	},
 };
 
 static cvar_filter_quirks_t *cvar_active_filter_quirks = NULL;
@@ -95,9 +99,15 @@ Cvar_BuildAutoDescription
 build cvar auto description that based on the setup flags
 ============
 */
-const char *Cvar_BuildAutoDescription( int flags )
+const char *Cvar_BuildAutoDescription( const char *szName, int flags )
 {
 	static char	desc[256];
+
+	if( FBitSet( flags, FCVAR_GLCONFIG ))
+	{
+		Q_snprintf( desc, sizeof( desc ), CVAR_GLCONFIG_DESCRIPTION, szName );
+		return desc;
+	}
 
 	desc[0] = '\0';
 
@@ -578,7 +588,7 @@ static convar_t *Cvar_Set2( const char *var_name, const char *value )
 		return Cvar_Get( var_name, value, FCVAR_USER_CREATED, NULL );
 	}
 	else
-	{	
+	{
 		if( !Cmd_CurrentCommandIsPrivileged( ))
 		{
 			if( FBitSet( var->flags, FCVAR_PRIVILEGED ))
@@ -622,7 +632,7 @@ static convar_t *Cvar_Set2( const char *var_name, const char *value )
 		force = true;
 
 	if( !force )
-	{ 
+	{
 		if( FBitSet( var->flags, FCVAR_READ_ONLY ))
 		{
 			Con_Printf( "%s is read-only.\n", var->name );
@@ -1080,7 +1090,7 @@ void Cvar_Toggle_f( void )
 
 	v = !Cvar_VariableInteger( Cmd_Argv( 1 ));
 
-	Cvar_Set( Cmd_Argv( 1 ), va( "%i", v ));
+	Cvar_Set( Cmd_Argv( 1 ), v ? "1" : "0" );
 }
 
 /*
@@ -1162,7 +1172,6 @@ void Cvar_List_f( void )
 {
 	convar_t	*var;
 	const char	*match = NULL;
-	char	*value;
 	int	count = 0;
 	size_t	matchlen = 0;
 
@@ -1174,6 +1183,8 @@ void Cvar_List_f( void )
 
 	for( var = cvar_vars; var; var = var->next )
 	{
+		char value[MAX_VA_STRING];
+
 		if( var->name[0] == '@' )
 			continue;	// never shows system cvars
 
@@ -1181,12 +1192,12 @@ void Cvar_List_f( void )
 			continue;
 
 		if( Q_colorstr( var->string ))
-			value = va( "\"%s\"", var->string );
-		else value = va( "\"^2%s^7\"", var->string );
+			Q_snprintf( value, sizeof( value ), "\"%s\"", var->string );
+		else Q_snprintf( value, sizeof( value ), "\"^2%s^7\"", var->string );
 
 		if( FBitSet( var->flags, FCVAR_EXTENDED|FCVAR_ALLOCATED ))
 			Con_Printf( " %-*s %s ^3%s^7\n", 32, var->name, value, var->desc );
-		else Con_Printf( " %-*s %s ^3%s^7\n", 32, var->name, value, Cvar_BuildAutoDescription( var->flags ));
+		else Con_Printf( " %-*s %s ^3%s^7\n", 32, var->name, value, Cvar_BuildAutoDescription( var->name, var->flags ));
 
 		count++;
 	}

@@ -123,6 +123,11 @@ def options(opt):
 	grp.add_option('--enable-fuzzer', action = 'store_true', dest = 'ENABLE_FUZZER', default = False,
 		help = 'enable building libFuzzer runner [default: %default]' )
 
+	grp = opt.add_option_group("Gamelib options")
+
+	grp.add_option("--enable-client-weapons", action = "store_true", dest = "CLIENT_WEAPONS", default = True,
+		help = "Enable clientside weapon prediction [default: %default]")
+
 	opt.load('compiler_optimizations subproject')
 
 	for i in SUBDIRS:
@@ -216,7 +221,8 @@ def configure(conf):
 	conf.load('force_32bit')
 
 	compiler_optional_flags = [
-		'-Wall', '-Wextra', '-Wpedantic',
+		# NOODLECOLLIE: Commenting these out for now until I can fix things on Linux
+		#'-Wall', '-Wextra', '-Wpedantic',
 		'-fdiagnostics-color=always',
 		'-Werror=return-type',
 		'-Werror=parentheses',

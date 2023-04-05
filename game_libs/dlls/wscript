@@ -2,7 +2,6 @@
 # encoding: utf-8
 
 from waflib import Logs
-from scripts.buildutils import gamelib_common
 import os
 import sys
 
@@ -155,15 +154,50 @@ SOURCES = \
 ]
 
 def options(opt):
-	gamelib_common.options(opt)
-
 	grp = opt.add_option_group("Server options")
 
 	grp.add_option('--enable-voicemgr', action = 'store_true', dest = 'VOICEMGR', default = False,
 		help = 'Enable voice manager [default: %default]')
 
 def configure(conf):
-	gamelib_common.configure(conf)
+	conf.env.append_unique("DEFINES", "GAME_LIBRARIES")
+
+	if conf.options.CLIENT_WEAPONS:
+		conf.define('CLIENT_WEAPONS', '1')
+
+	if conf.env.DEST_OS == 'win32':
+		conf.env.append_unique("DEFINES",
+		[
+			"_WIN32",
+			"WIN32",
+			"NOMINMAX"
+		])
+
+		# Needed to avoid warnings with MiniUTL.
+		# 4005 = Macro redefinition
+		# 4244 = Possible loss of data on type cast
+		conf.env.append_unique("CXXFLAGS",
+		[
+			"/WX",
+			"/wd4005",
+			"/wd4244",
+			"/EHsc"
+		])
+	else:
+		conf.env.append_unique("DEFINES",
+		[
+			"_LINUX",	# Apparently this covers all non-Windows platforms adequately.
+			"stricmp=strcasecmp",
+			"strnicmp=strncasecmp",
+			"_snprintf=snprintf",
+			"_vsnprintf=vsnprintf"
+		])
+
+		conf.env.append_unique("CXXFLAGS",
+		[
+			"-fno-exceptions",
+			"-Wno-invalid-offsetof"
+		])
 
 	conf.env.VOICEMGR = conf.options.VOICEMGR
 
@@ -171,18 +205,19 @@ def configure(conf):
 		conf.define("NO_VOICEGAMEMGR", 1)
 
 	if conf.env.COMPILER_CC == 'msvc':
+		defName = "hl_amd64.def" if conf.options.ALLOW64 else "hl.def"
 		# hl.def removes MSVC function name decoration from GiveFnptrsToDll on Windows.
 		# Without this, the lookup for this function fails.
 		# I guess we could mark this as extern C, but for now we just use the .def file.
-		hlDefNode = conf.path.find_resource("./hl.def")
+		hlDefNode = conf.path.find_resource("./" + defName)
 
 		if hlDefNode is not None:
-			conf.env.append_unique('LINKFLAGS', f'/def:{hlDefNode.abspath()}')
+			conf.env.append_unique('LINKFLAGS', '/def:' + hlDefNode.abspath())
 		else:
-			conf.fatal("Could not find hl.def")
+			conf.fatal("Could not find " + defName)
 
 	conf.env.SERVER_DIR = "dlls"
-	conf.env.SERVER_TARGET = "hl"
+	conf.env.SERVER_TARGET = "hl_amd64" if conf.options.ALLOW64 else "hl"
 
 	conf.env.append_unique("DEFINES", DEFINES)
 

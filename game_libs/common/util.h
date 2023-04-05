@@ -47,10 +47,15 @@ extern globalvars_t				*gpGlobals;
 #define STRING(offset)		(const char *)(gpGlobals->pStringBase + (int)offset)
 
 #if !defined XASH_64BIT || defined(CLIENT_DLL)
-#define MAKE_STRING(str)	((int)(long int)str - (int)(long int)STRING(0))
+#define MAKE_STRING(str)	((int)(size_t)str - (int)(size_t)STRING(0))
 #else
 static inline int MAKE_STRING(const char *szValue)
 {
+	if ( !szValue )
+	{
+		return 0;
+	}
+
 	long long ptrdiff = szValue - STRING(0);
 	if( ptrdiff > INT_MAX || ptrdiff < INT_MIN )
 		return ALLOC_STRING( szValue );
