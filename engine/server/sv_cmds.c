@@ -394,7 +394,7 @@ void SV_HazardCourse_f( void )
 	// special case for Gunman Chronicles: playing avi-file
 	if( FS_FileExists( va( "media/%s.avi", GI->trainmap ), false ))
 	{
-		Cbuf_AddText( va( "wait; movie %s\n", GI->trainmap ));
+		Cbuf_AddTextf( "wait; movie %s\n", GI->trainmap );
 		Host_EndGame( true, DEFAULT_ENDGAME_MESSAGE );
 	}
 	else COM_NewGame( GI->trainmap );
@@ -749,9 +749,9 @@ void SV_ConSay_f( void )
 SV_Heartbeat_f
 ==================
 */
-void SV_Heartbeat_f( void )
+static void SV_Heartbeat_f( void )
 {
-	svs.last_heartbeat = MAX_HEARTBEAT;
+	NET_MasterClear();
 }
 
 /*

@@ -36,10 +36,10 @@ typedef struct hash_pack_queue_s
 	struct hash_pack_queue_s	*next;
 } hash_pack_queue_t;
 
-convar_t		*hpk_maxsize;
-hash_pack_queue_t	*gp_hpak_queue = NULL;
-hpak_header_t	hash_pack_header;
-hpak_info_t	hash_pack_info;
+static CVAR_DEFINE_AUTO( hpk_maxsize, "4", FCVAR_ARCHIVE, "set limit by size for all HPK-files ( 0 - unlimited )" );
+static hash_pack_queue_t	*gp_hpak_queue = NULL;
+static hpak_header_t	hash_pack_header;
+static hpak_info_t	hash_pack_info;
 
 const char *HPAK_TypeFromIndex( int type )
 {
@@ -108,7 +108,6 @@ void HPAK_CreatePak( const char *filename, resource_t *pResource, byte *pData, f
 	byte		md5[16];
 	file_t		*fout;
 	MD5Context_t	ctx;
-	dresource_t	dresource;
 
 	if( !COM_CheckString( filename ))
 		return;
@@ -384,7 +383,7 @@ void HPAK_AddLump( qboolean bUseQueue, const char *name, resource_t *pResource, 
 	FS_Rename( dstname, srcname );
 }
 
-static qboolean HPAK_Validate( const char *filename, qboolean quiet )
+static qboolean HPAK_Validate( const char *filename, qboolean quiet, qboolean delete )
 {
 	file_t		*f;
 	hpak_lump_t	*dataDir;
@@ -419,6 +418,7 @@ static qboolean HPAK_Validate( const char *filename, qboolean quiet )
 	{
 		Con_DPrintf( S_ERROR "HPAK_ValidatePak: %s does not have a valid HPAK header.\n", pakname );
 		FS_Close( f );
+		if( delete ) FS_Delete( pakname );
 		return false;
 	}
 
@@ -429,6 +429,7 @@ static qboolean HPAK_Validate( const char *filename, qboolean quiet )
 	{
 		Con_DPrintf( S_ERROR "HPAK_ValidatePak: %s has too many lumps %u.\n", pakname, num_lumps );
 		FS_Close( f );
+		if( delete ) FS_Delete( pakname );
 		return false;
 	}
 
@@ -446,7 +447,8 @@ static qboolean HPAK_Validate( const char *filename, qboolean quiet )
 			// odd max size
 			Con_DPrintf( S_ERROR "HPAK_ValidatePak: lump %i has invalid size %s\n", i, Q_pretifymem( dataDir[i].disksize, 2 ));
 			Mem_Free( dataDir );
-			FS_Close(f);
+			FS_Close( f );
+			if( delete ) FS_Delete( pakname );
 			return false;
 		}
 
@@ -472,6 +474,7 @@ static qboolean HPAK_Validate( const char *filename, qboolean quiet )
 				Mem_Free( dataPak );
 				Mem_Free( dataDir );
 				FS_Close( f );
+				if( delete ) FS_Delete( pakname );
 				return false;
 			}
 			else Con_DPrintf( S_ERROR "failed\n" );
@@ -490,11 +493,6 @@ static qboolean HPAK_Validate( const char *filename, qboolean quiet )
 	return true;
 }
 
-void HPAK_ValidatePak( const char *filename )
-{
-	HPAK_Validate( filename, true );
-}
-
 void HPAK_CheckIntegrity( const char *filename )
 {
 	string	pakname;
@@ -505,7 +503,7 @@ void HPAK_CheckIntegrity( const char *filename )
 	Q_strncpy( pakname, filename, sizeof( pakname ));
 	COM_ReplaceExtension( pakname, ".hpk" );
 
-	HPAK_ValidatePak( pakname );
+	HPAK_Validate( pakname, true, true );
 }
 
 void HPAK_CheckSize( const char *filename )
@@ -513,7 +511,7 @@ void HPAK_CheckSize( const char *filename )
 	string	pakname;
 	int	maxsize;
 
-	maxsize = hpk_maxsize->value;
+	maxsize = hpk_maxsize.value;
 	if( maxsize <= 0 ) return;
 
 	if( !COM_CheckString( filename ) )
@@ -524,8 +522,8 @@ void HPAK_CheckSize( const char *filename )
 
 	if( FS_FileSize( pakname, false ) > ( maxsize * 1048576 ))
 	{
-		Con_Printf( "Server: Size of %s > %f MB, deleting.\n", filename, hpk_maxsize->value );
-		Log_Printf( "Server: Size of %s > %f MB, deleting.\n", filename, hpk_maxsize->value );
+		Con_Printf( "Server: Size of %s > %f MB, deleting.\n", filename, hpk_maxsize.value );
+		Log_Printf( "Server: Size of %s > %f MB, deleting.\n", filename, hpk_maxsize.value );
 		FS_Delete( filename );
 	}
 }
@@ -1097,7 +1095,7 @@ void HPAK_Validate_f( void )
 		return;
 	}
 
-	HPAK_Validate( Cmd_Argv( 1 ), false );
+	HPAK_Validate( Cmd_Argv( 1 ), false, false );
 }
 
 void HPAK_Init( void )
@@ -1106,7 +1104,7 @@ void HPAK_Init( void )
 	Cmd_AddRestrictedCommand( "hpkremove", HPAK_Remove_f, "remove specified file from HPK-file" );
 	Cmd_AddRestrictedCommand( "hpkval", HPAK_Validate_f, "validate specified HPK-file" );
 	Cmd_AddRestrictedCommand( "hpkextract", HPAK_Extract_f, "extract all lumps from specified HPK-file" );
-	hpk_maxsize = Cvar_Get( "hpk_maxsize", "0", FCVAR_ARCHIVE, "set limit by size for all HPK-files ( 0 - unlimited )" );
+	Cvar_RegisterVariable( &hpk_maxsize );
 
 	gp_hpak_queue = NULL;
 }

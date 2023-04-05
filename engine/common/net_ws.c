@@ -398,7 +398,7 @@ void *NET_ThreadStart( void *unused )
 #define mutex_lock EnterCriticalSection
 #define mutex_unlock LeaveCriticalSection
 #define detach_thread( x ) CloseHandle(x)
-#define create_thread( pfn ) nsthread.thread = CreateThread( NULL, 0, pfn, NULL, 0, NULL )
+#define create_thread( pfn ) ( nsthread.thread = CreateThread( NULL, 0, pfn, NULL, 0, NULL ))
 #define mutex_t  CRITICAL_SECTION
 #define thread_t HANDLE
 DWORD WINAPI NET_ThreadStart( LPVOID unused )
@@ -477,7 +477,7 @@ idnewt:28000
 192.246.40.70:28000
 =============
 */
-static int NET_StringToSockaddr( const char *s, struct sockaddr_storage *sadr, qboolean nonblocking, int family )
+static net_gai_state_t NET_StringToSockaddr( const char *s, struct sockaddr_storage *sadr, qboolean nonblocking, int family )
 {
 	int ret = 0, port;
 	char	*colon;
@@ -486,7 +486,7 @@ static int NET_StringToSockaddr( const char *s, struct sockaddr_storage *sadr, q
 	struct sockaddr_storage temp;
 
 	if( !net.initialized )
-		return false;
+		return NET_EAI_NONAME;
 
 	memset( sadr, 0, sizeof( *sadr ));
 
@@ -497,7 +497,7 @@ static int NET_StringToSockaddr( const char *s, struct sockaddr_storage *sadr, q
 		((struct sockaddr_in6 *)sadr)->sin6_port = htons((short)port);
 		memcpy(((struct sockaddr_in6 *)sadr)->sin6_addr.s6_addr, ip6, sizeof( struct in6_addr ));
 
-		return true;
+		return NET_EAI_OK;
 	}
 
 	Q_strncpy( copy, s, sizeof( copy ));
@@ -530,14 +530,14 @@ static int NET_StringToSockaddr( const char *s, struct sockaddr_storage *sadr, q
 			if( nsthread.busy )
 			{
 				mutex_unlock( &nsthread.mutexres );
-				return 2;
+				return NET_EAI_AGAIN;
 			}
 
 			if( !Q_strcmp( copy, nsthread.hostname ))
 			{
 				ret = nsthread.result;
 
-				nsthread.hostname[0] = 0;
+				nsthread.hostname[0] = '\0';
 				nsthread.family = AF_UNSPEC;
 				temp = nsthread.addr;
 				memset( &nsthread.addr, 0, sizeof( nsthread.addr ));
@@ -554,11 +554,11 @@ static int NET_StringToSockaddr( const char *s, struct sockaddr_storage *sadr, q
 				if( create_thread( NET_ThreadStart ))
 				{
 					asyncfailed = false;
-					return 2;
+					return NET_EAI_AGAIN;
 				}
 				else // failed to create thread
 				{
-					Con_Reportf( S_ERROR  "NET_StringToSockaddr: failed to create thread!\n");
+					Con_Reportf( S_ERROR "NET_StringToSockaddr: failed to create thread!\n");
 					nsthread.busy = false;
 				}
 			}
@@ -577,7 +577,8 @@ static int NET_StringToSockaddr( const char *s, struct sockaddr_storage *sadr, q
 			if( family == AF_INET6 )
 				sadr->ss_family = AF_INET6;
 			else sadr->ss_family = AF_INET;
-			return 0;
+
+			return NET_EAI_NONAME;
 		}
 
 		sadr->ss_family = temp.ss_family;
@@ -595,7 +596,7 @@ static int NET_StringToSockaddr( const char *s, struct sockaddr_storage *sadr, q
 		}
 	}
 
-	return 1;
+	return NET_EAI_OK;
 }
 
 /*
@@ -1041,10 +1042,9 @@ qboolean NET_StringToAdrEx( const char *string, netadr_t *adr, int family )
 		return true;
 	}
 
-	if( !NET_StringToSockaddr( string, &s, false, family ))
+	if( NET_StringToSockaddr( string, &s, false, family ) != NET_EAI_OK )
 		return false;
 	NET_SockadrToNetadr( &s, adr );
-
 	return true;
 }
 
@@ -1054,13 +1054,13 @@ qboolean NET_StringToAdr( const char *string, netadr_t *adr )
 	return NET_StringToAdrEx( string, adr, AF_UNSPEC );
 }
 
-int NET_StringToAdrNB( const char *string, netadr_t *adr )
+net_gai_state_t NET_StringToAdrNB( const char *string, netadr_t *adr )
 {
 	struct sockaddr_storage s;
-	int res;
+	net_gai_state_t res;
 
 	memset( adr, 0, sizeof( netadr_t ));
-	if( !Q_stricmp( string, "localhost" )  || !Q_stricmp( string, "loopback" ))
+	if( !Q_stricmp( string, "localhost" ) || !Q_stricmp( string, "loopback" ))
 	{
 		adr->type = NA_LOOPBACK;
 		return true;
@@ -1068,12 +1068,10 @@ int NET_StringToAdrNB( const char *string, netadr_t *adr )
 
 	res = NET_StringToSockaddr( string, &s, true, AF_UNSPEC );
 
-	if( res == 0 || res == 2 )
-		return res;
+	if( res == NET_EAI_OK )
+		NET_SockadrToNetadr( &s, adr );
 
-	NET_SockadrToNetadr( &s, adr );
-
-	return true;
+	return res;
 }
 
 /*
@@ -1685,68 +1683,6 @@ void NET_SendPacket( netsrc_t sock, size_t length, const void *data, netadr_t to
 
 /*
 ====================
-NET_BufferToBufferCompress
-
-generic fast compression
-====================
-*/
-qboolean NET_BufferToBufferCompress( byte *dest, uint *destLen, byte *source, uint sourceLen )
-{
-	uint	uCompressedLen = 0;
-	byte	*pbOut = NULL;
-
-	memcpy( dest, source, sourceLen );
-	pbOut = LZSS_Compress( source, sourceLen, &uCompressedLen );
-
-	if( pbOut && uCompressedLen > 0 && uCompressedLen <= *destLen )
-	{
-		memcpy( dest, pbOut, uCompressedLen );
-		*destLen = uCompressedLen;
-		free( pbOut );
-		return true;
-	}
-	else
-	{
-		if( pbOut ) free( pbOut );
-		memcpy( dest, source, sourceLen );
-		*destLen = sourceLen;
-		return false;
-	}
-}
-
-/*
-====================
-NET_BufferToBufferDecompress
-
-generic fast decompression
-====================
-*/
-qboolean NET_BufferToBufferDecompress( byte *dest, uint *destLen, byte *source, uint sourceLen )
-{
-	if( LZSS_IsCompressed( source ))
-	{
-		uint	uDecompressedLen = LZSS_GetActualSize( source );
-
-		if( uDecompressedLen <= *destLen )
-		{
-			*destLen = LZSS_Decompress( source, dest );
-		}
-		else
-		{
-			return false;
-		}
-	}
-	else
-	{
-		memcpy( dest, source, sourceLen );
-		*destLen = sourceLen;
-	}
-
-	return true;
-}
-
-/*
-====================
 NET_IPSocket
 ====================
 */
@@ -2166,9 +2102,9 @@ void NET_Init( void )
 	net_address = Cvar_Get( "net_address", "0", FCVAR_PRIVILEGED|FCVAR_READ_ONLY, "contain local address of current client" );
 	net_ipname = Cvar_Get( "ip", "localhost", FCVAR_PRIVILEGED, "network ip address" );
 	net_iphostport = Cvar_Get( "ip_hostport", "0", FCVAR_READ_ONLY, "network ip host port" );
-	net_hostport = Cvar_Get( "hostport", va( "%i", PORT_SERVER ), FCVAR_READ_ONLY, "network default host port" );
+	net_hostport = Cvar_Getf( "hostport", FCVAR_READ_ONLY, "network default host port", "%i", PORT_SERVER );
 	net_ipclientport = Cvar_Get( "ip_clientport", "0", FCVAR_READ_ONLY, "network ip client port" );
-	net_clientport = Cvar_Get( "clientport", va( "%i", PORT_CLIENT ), FCVAR_READ_ONLY, "network default client port" );
+	net_clientport = Cvar_Getf( "clientport", FCVAR_READ_ONLY, "network default client port", "%i", PORT_CLIENT );
 	net_fakelag = Cvar_Get( "fakelag", "0", FCVAR_PRIVILEGED, "lag all incoming network data (including loopback) by xxx ms." );
 	net_fakeloss = Cvar_Get( "fakeloss", "0", FCVAR_PRIVILEGED, "act like we dropped the packet this % of the time." );
 
@@ -2578,7 +2514,6 @@ void HTTP_Run( void )
 
 	for( curfile = http.first_file; curfile; curfile = curfile->next )
 	{
-		int res;
 		struct sockaddr_storage addr;
 
 		if( curfile->state == HTTP_FREE )
@@ -2639,18 +2574,23 @@ void HTTP_Run( void )
 
 		if( curfile->state < HTTP_NS_RESOLVED )
 		{
+			net_gai_state_t res;
+			char hostport[MAX_VA_STRING];
+
 			if( fResolving )
 				continue;
 
-			res = NET_StringToSockaddr( va( "%s:%d", curfile->server->host, curfile->server->port ), &addr, true, AF_INET );
+			Q_snprintf( hostport, sizeof( hostport ), "%s:%d", curfile->server->host, curfile->server->port );
 
-			if( res == 2 )
+			res = NET_StringToSockaddr( hostport, &addr, true, AF_INET );
+
+			if( res == NET_EAI_AGAIN )
 			{
 				fResolving = true;
 				continue;
 			}
 
-			if( !res )
+			if( res == NET_EAI_NONAME )
 			{
 				Con_Printf( S_ERROR "failed to resolve server address for %s!\n", curfile->server->host );
 				HTTP_FreeFile( curfile, true ); // Cannot connect
@@ -2661,7 +2601,7 @@ void HTTP_Run( void )
 
 		if( curfile->state < HTTP_CONNECTED ) // Connection not enstabilished
 		{
-			res = connect( curfile->socket, (struct sockaddr*)&addr, NET_SockAddrLen( &addr ) );
+			int res = connect( curfile->socket, (struct sockaddr*)&addr, NET_SockAddrLen( &addr ) );
 
 			if( res )
 			{
@@ -2680,11 +2620,23 @@ void HTTP_Run( void )
 
 		if( curfile->state < HTTP_REQUEST ) // Request not formatted
 		{
+			string useragent;
+
+			if( !COM_CheckStringEmpty( http_useragent->string ) || !Q_strcmp( http_useragent->string, "xash3d" ))
+			{
+				Q_snprintf( useragent, sizeof( useragent ), "%s/%s (%s-%s; build %d; %s)",
+					XASH_ENGINE_NAME, XASH_VERSION, Q_buildos( ), Q_buildarch( ), Q_buildnum( ), Q_buildcommit( ));
+			}
+			else
+			{
+				Q_strncpy( useragent, http_useragent->string, sizeof( useragent ));
+			}
+
 			curfile->query_length = Q_snprintf( curfile->buf, sizeof( curfile->buf ),
 				"GET %s%s HTTP/1.0\r\n"
 				"Host: %s\r\n"
 				"User-Agent: %s\r\n\r\n", curfile->server->path,
-				curfile->path, curfile->server->host, http_useragent->string );
+				curfile->path, curfile->server->host, useragent );
 			curfile->header_size = 0;
 			curfile->bytes_sent = 0;
 			curfile->state = HTTP_REQUEST;
@@ -2696,8 +2648,7 @@ void HTTP_Run( void )
 
 			while( curfile->bytes_sent < curfile->query_length )
 			{
-				res = send( curfile->socket, curfile->buf + curfile->bytes_sent, curfile->query_length - curfile->bytes_sent, 0 );
-
+				int res = send( curfile->socket, curfile->buf + curfile->bytes_sent, curfile->query_length - curfile->bytes_sent, 0 );
 
 				if( res < 0 )
 				{
@@ -3027,16 +2978,16 @@ void HTTP_Init( void )
 
 	http.first_file = http.last_file = NULL;
 
-	Cmd_AddRestrictedCommand("http_download", &HTTP_Download_f, "add file to download queue");
-	Cmd_AddRestrictedCommand("http_skip", &HTTP_Skip_f, "skip current download server");
-	Cmd_AddRestrictedCommand("http_cancel", &HTTP_Cancel_f, "cancel current download");
-	Cmd_AddRestrictedCommand("http_clear", &HTTP_Clear_f, "cancel all downloads");
-	Cmd_AddCommand("http_list", &HTTP_List_f, "list all queued downloads");
-	Cmd_AddCommand("http_addcustomserver", &HTTP_AddCustomServer_f, "add custom fastdl server");
-	http_useragent = Cvar_Get( "http_useragent", "xash3d", FCVAR_ARCHIVE, "User-Agent string" );
-	http_autoremove = Cvar_Get( "http_autoremove", "1", FCVAR_ARCHIVE, "remove broken files" );
-	http_timeout = Cvar_Get( "http_timeout", "45", FCVAR_ARCHIVE, "timeout for http downloader" );
-	http_maxconnections =  Cvar_Get( "http_maxconnections", "4", FCVAR_ARCHIVE, "maximum http connection number" );
+	Cmd_AddRestrictedCommand( "http_download", HTTP_Download_f, "add file to download queue" );
+	Cmd_AddRestrictedCommand( "http_skip", HTTP_Skip_f, "skip current download server" );
+	Cmd_AddRestrictedCommand( "http_cancel", HTTP_Cancel_f, "cancel current download" );
+	Cmd_AddRestrictedCommand( "http_clear", HTTP_Clear_f, "cancel all downloads" );
+	Cmd_AddRestrictedCommand( "http_list", HTTP_List_f, "list all queued downloads" );
+	Cmd_AddCommand( "http_addcustomserver", HTTP_AddCustomServer_f, "add custom fastdl server");
+	http_useragent = Cvar_Get( "http_useragent", "", FCVAR_ARCHIVE | FCVAR_PRIVILEGED, "User-Agent string" );
+	http_autoremove = Cvar_Get( "http_autoremove", "1", FCVAR_ARCHIVE | FCVAR_PRIVILEGED, "remove broken files" );
+	http_timeout = Cvar_Get( "http_timeout", "45", FCVAR_ARCHIVE | FCVAR_PRIVILEGED, "timeout for http downloader" );
+	http_maxconnections =  Cvar_Get( "http_maxconnections", "4", FCVAR_ARCHIVE | FCVAR_PRIVILEGED, "maximum http connection number" );
 
 	// Read servers from fastdl.txt
 	line = serverfile = (char *)FS_LoadFile( "fastdl.txt", 0, false );

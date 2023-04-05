@@ -432,7 +432,7 @@ void SV_ConnectClient( netadr_t from )
 
 	// build protinfo answer
 	protinfo[0] = '\0';
-	Info_SetValueForKey( protinfo, "ext", va( "%d", newcl->extensions ), sizeof( protinfo ) );
+	Info_SetValueForKeyf( protinfo, "ext", sizeof( protinfo ), "%d", newcl->extensions );
 
 	// send the connect packet to the client
 	Netchan_OutOfBandPrint( NS_SERVER, from, "client_connect %s", protinfo );
@@ -475,7 +475,7 @@ void SV_ConnectClient( netadr_t from )
 	Log_Printf( "\"%s<%i><%i><>\" connected, address \"%s\"\n", newcl->name, newcl->userid, i, NET_AdrToString( newcl->netchan.remote_address ));
 
 	if( count == 1 || count == svs.maxclients )
-		svs.last_heartbeat = MAX_HEARTBEAT;
+		NET_MasterClear();
 }
 
 /*
@@ -542,7 +542,7 @@ edict_t *SV_FakeConnect( const char *netname )
 	cl->state = cs_spawned;
 
 	if( count == 1 || count == svs.maxclients )
-		svs.last_heartbeat = MAX_HEARTBEAT;
+		NET_MasterClear();
 
 	return cl->edict;
 }
@@ -619,7 +619,7 @@ void SV_DropClient( sv_client_t *cl, qboolean crash )
 	}
 
 	if( i == svs.maxclients )
-		svs.last_heartbeat = MAX_HEARTBEAT;
+		NET_MasterClear();
 }
 
 /*
@@ -875,13 +875,13 @@ void SV_Info( netadr_t from, int protocolVersion )
 		SV_GetPlayerCount( &count, &bots );
 
 		// a1ba: send protocol version to distinguish old engine and new
-		Info_SetValueForKey( s, "p", va( "%i", PROTOCOL_VERSION ), sizeof( s ));
+		Info_SetValueForKeyf( s, "p", sizeof( s ), "%i", PROTOCOL_VERSION );
 		Info_SetValueForKey( s, "map", sv.name, sizeof( s ));
 		Info_SetValueForKey( s, "dm", svgame.globals->deathmatch ? "1" : "0", sizeof( s ));
 		Info_SetValueForKey( s, "team", svgame.globals->teamplay ? "1" : "0", sizeof( s ));
 		Info_SetValueForKey( s, "coop", svgame.globals->coop ? "1" : "0", sizeof( s ));
-		Info_SetValueForKey( s, "numcl", va( "%i", count ), sizeof( s ));
-		Info_SetValueForKey( s, "maxcl", va( "%i", svs.maxclients ), sizeof( s ));
+		Info_SetValueForKeyf( s, "numcl", sizeof( s ), "%i", count );
+		Info_SetValueForKeyf( s, "maxcl", sizeof( s ), "%i", svs.maxclients );
 		Info_SetValueForKey( s, "gamedir", GI->gamefolder, sizeof( s ));
 		Info_SetValueForKey( s, "password", have_password ? "1" : "0", sizeof( s ));
 
@@ -980,8 +980,8 @@ void SV_BuildNetAnswer( netadr_t from )
 		string[0] = '\0';
 		Info_SetValueForKey( string, "hostname", hostname.string, MAX_INFO_STRING );
 		Info_SetValueForKey( string, "gamedir", GI->gamefolder, MAX_INFO_STRING );
-		Info_SetValueForKey( string, "current", va( "%i", count ), MAX_INFO_STRING );
-		Info_SetValueForKey( string, "max", va( "%i", svs.maxclients ), MAX_INFO_STRING );
+		Info_SetValueForKeyf( string, "current", MAX_INFO_STRING, "%i", count );
+		Info_SetValueForKeyf( string, "max", MAX_INFO_STRING, "%i", svs.maxclients );
 		Info_SetValueForKey( string, "map", sv.name, MAX_INFO_STRING );
 
 		// send serverinfo
@@ -1420,7 +1420,7 @@ void SV_PutClientInServer( sv_client_t *cl )
 	if( svgame.globals->cdAudioTrack )
 	{
 		MSG_BeginServerCmd( &msg, svc_stufftext );
-		MSG_WriteString( &msg, va( "cd loop %3d\n", svgame.globals->cdAudioTrack ));
+		MSG_WriteStringf( &msg, "cd loop %3d\n", svgame.globals->cdAudioTrack );
 		svgame.globals->cdAudioTrack = 0;
 	}
 
@@ -1660,7 +1660,7 @@ static qboolean SV_New_f( sv_client_t *cl )
 
 	// server info string
 	MSG_BeginServerCmd( &msg, svc_stufftext );
-	MSG_WriteString( &msg, va( "fullserverinfo \"%s\"\n", SV_Serverinfo( )));
+	MSG_WriteStringf( &msg, "fullserverinfo \"%s\"\n", SV_Serverinfo( ));
 
 	// collect the info about all the players and send to me
 	for( i = 0, cur = svs.clients; i < svs.maxclients; i++, cur++ )
@@ -2740,15 +2740,15 @@ static void SV_EntSendVars( sv_client_t *cl, edict_t *ent )
 		return;
 
 	MSG_WriteByte( &cl->netchan.message, svc_stufftext );
-	MSG_WriteString( &cl->netchan.message, va( "set ent_last_name \"%s\"\n", STRING( ent->v.targetname ) ));
+	MSG_WriteStringf( &cl->netchan.message, "set ent_last_name \"%s\"\n", STRING( ent->v.targetname ));
 	MSG_WriteByte( &cl->netchan.message, svc_stufftext );
-	MSG_WriteString( &cl->netchan.message, va( "set ent_last_num %i\n", NUM_FOR_EDICT( ent ) ));
+	MSG_WriteStringf( &cl->netchan.message, "set ent_last_num %i\n", NUM_FOR_EDICT( ent ));
 	MSG_WriteByte( &cl->netchan.message, svc_stufftext );
-	MSG_WriteString( &cl->netchan.message, va( "set ent_last_inst !%i_%i\n", NUM_FOR_EDICT( ent ), ent->serialnumber ));
+	MSG_WriteStringf( &cl->netchan.message, "set ent_last_inst !%i_%i\n", NUM_FOR_EDICT( ent ), ent->serialnumber );
 	MSG_WriteByte( &cl->netchan.message, svc_stufftext );
-	MSG_WriteString( &cl->netchan.message, va( "set ent_last_origin \"%f %f %f\"\n", ent->v.origin[0], ent->v.origin[1], ent->v.origin[2]));
+	MSG_WriteStringf( &cl->netchan.message, "set ent_last_origin \"%f %f %f\"\n", ent->v.origin[0], ent->v.origin[1], ent->v.origin[2] );
 	MSG_WriteByte( &cl->netchan.message, svc_stufftext );
-	MSG_WriteString( &cl->netchan.message, va( "set ent_last_class \"%s\"\n", STRING( ent->v.classname )));
+	MSG_WriteStringf( &cl->netchan.message, "set ent_last_class \"%s\"\n", STRING( ent->v.classname ));
 	MSG_WriteByte( &cl->netchan.message, svc_stufftext );
 	MSG_WriteString( &cl->netchan.message, "ent_getvars_cb\n" ); // why do we need this?
 }
@@ -3116,7 +3116,7 @@ void SV_ConnectionlessPacket( netadr_t from, sizebuf_t *msg )
 	else if( !Q_strcmp( pcmd, "s" )) SV_AddToMaster( from, msg );
 	else if( !Q_strcmp( pcmd, "T" "Source" )) SV_TSourceEngineQuery( from );
 	else if( !Q_strcmp( pcmd, "i" )) NET_SendPacket( NS_SERVER, 5, "\xFF\xFF\xFF\xFFj", from ); // A2A_PING
-	else if( !Q_strcmp( pcmd, "c" ) && Cvar_VariableInteger( "sv_nat" ) && NET_IsMasterAdr( from ))
+	else if( !Q_strcmp( pcmd, "c" ) && sv_nat.value && NET_IsMasterAdr( from ))
 	{
 		netadr_t to;
 		if( NET_StringToAdr( Cmd_Argv( 1 ), &to ) && !NET_IsReservedAdr( to ))

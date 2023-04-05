@@ -36,18 +36,6 @@ qboolean R_CullBox( const vec3_t mins, const vec3_t maxs )
 }
 
 /*
-=================
-R_CullSphere
-
-Returns true if the sphere is completely outside the frustum
-=================
-*/
-qboolean R_CullSphere( const vec3_t centre, const float radius )
-{
-	return GL_FrustumCullSphere( &RI.frustum, centre, radius, 0 );
-}
-
-/*
 =============
 R_CullModel
 =============
@@ -64,10 +52,6 @@ int R_CullModel( cl_entity_t *e, const vec3_t absmin, const vec3_t absmax )
 
 		return 1;
 	}
-
-	// local client can't view himself if camera or thirdperson is not active
-	if( RP_LOCALCLIENT( e ) && !ENGINE_GET_PARM( PARM_THIRDPERSON ) && CL_IsViewEntityLocalPlayer())
-		return 1;
 
 	if( R_CullBox( absmin, absmax ))
 		return 1;

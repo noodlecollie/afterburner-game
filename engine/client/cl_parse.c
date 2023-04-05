@@ -503,7 +503,7 @@ void CL_BatchResourceRequest( qboolean initialize )
 				if( !FBitSet( p->ucFlags, RES_REQUESTED ))
 				{
 					MSG_BeginClientCmd( &msg, clc_stringcmd );
-					MSG_WriteString( &msg, va( "dlfile !MD5%s", MD5_Print( p->rgucMD5_hash ) ) );
+					MSG_WriteStringf( &msg, "dlfile !MD5%s", MD5_Print( p->rgucMD5_hash ));;
 					SetBits( p->ucFlags, RES_REQUESTED );
 				}
 				break;
@@ -591,7 +591,7 @@ int CL_EstimateNeededResources( void )
 	return nTotalSize;
 }
 
-void CL_StartResourceDownloading( const char *pszMessage, qboolean bCustom )
+static void CL_StartResourceDownloading( const char *pszMessage, qboolean bCustom )
 {
 	resourceinfo_t	ri;
 
@@ -607,6 +607,8 @@ void CL_StartResourceDownloading( const char *pszMessage, qboolean bCustom )
 	}
 	else
 	{
+		HTTP_ResetProcessState();
+
 		cls.state = ca_validate;
 		cls.dl.custom = false;
 	}
@@ -852,6 +854,8 @@ void CL_ParseServerData( sizebuf_t *msg, qboolean legacy )
 	char	gamefolder[MAX_QPATH];
 	qboolean	background;
 	int	i;
+
+	HPAK_CheckSize( CUSTOM_RES_PATH );
 
 	Con_Reportf( "%s packet received.\n", legacy ? "Legacy serverdata" : "Serverdata" );
 
@@ -1241,11 +1245,9 @@ CL_ParseSetAngle
 set the view angle to this absolute value
 ================
 */
-void CL_ParseSetAngle( sizebuf_t *msg )
+static void CL_ParseSetAngle( sizebuf_t *msg )
 {
-	cl.viewangles[0] = MSG_ReadBitAngle( msg, 16 );
-	cl.viewangles[1] = MSG_ReadBitAngle( msg, 16 );
-	cl.viewangles[2] = MSG_ReadBitAngle( msg, 16 );
+	MSG_ReadVec3Angles( msg, cl.viewangles );
 }
 
 /*
@@ -1612,7 +1614,7 @@ void CL_RegisterResources( sizebuf_t *msg )
 			// done with all resources, issue prespawn command.
 			// Include server count in case server disconnects and changes level during d/l
 			MSG_BeginClientCmd( msg, clc_stringcmd );
-			MSG_WriteString( msg, va( "spawn %i", cl.servercount ));
+			MSG_WriteStringf( msg, "spawn %i", cl.servercount );
 		}
 	}
 	else
@@ -2006,7 +2008,7 @@ void CL_ParseExec( sizebuf_t *msg )
 		COM_FileBase( clgame.mapname, mapname );
 
 		if ( COM_CheckString( mapname ) )
-			Cbuf_AddText( va( "exec %s.cfg\n", mapname ) );
+			Cbuf_AddTextf( "exec %s.cfg\n", mapname );
 	}
 }
 
@@ -2670,15 +2672,14 @@ CL_ParseResourceList
 void CL_LegacyParseResourceList( sizebuf_t *msg )
 {
 	int	i = 0;
-
 	static struct
 	{
 		int  rescount;
 		int  restype[MAX_LEGACY_RESOURCES];
 		char resnames[MAX_LEGACY_RESOURCES][MAX_QPATH];
 	} reslist;
-	memset( &reslist, 0, sizeof( reslist ));
 
+	memset( &reslist, 0, sizeof( reslist ));
 	reslist.rescount = MSG_ReadWord( msg ) - 1;
 
 	if( reslist.rescount > MAX_LEGACY_RESOURCES )
@@ -2695,14 +2696,21 @@ void CL_LegacyParseResourceList( sizebuf_t *msg )
 		return;
 	}
 
+	HTTP_ResetProcessState();
+
 	host.downloadcount = 0;
 
 	for( i = 0; i < reslist.rescount; i++ )
 	{
+		char soundpath[MAX_VA_STRING];
 		const char *path;
 
 		if( reslist.restype[i] == t_sound )
-			path = va( DEFAULT_SOUNDPATH "%s", reslist.resnames[i] );
+		{
+			Q_snprintf( soundpath, sizeof( soundpath ), DEFAULT_SOUNDPATH "%s", reslist.resnames[i] );
+
+			path = soundpath;
+		}
 		else path = reslist.resnames[i];
 
 		if( FS_FileExists( path, false ))
@@ -2886,7 +2894,7 @@ void CL_ParseLegacyServerMessage( sizebuf_t *msg, qboolean normal_message )
 			cl.frames[cl.parsecountmod].graphdata.sound += MSG_GetNumBytesRead( msg ) - bufStart;
 			break;
 		case svc_spawnstatic:
-			CL_ParseStaticEntity( msg );
+			CL_LegacyParseStaticEntity( msg );
 			break;
 		case svc_event_reliable:
 			CL_ParseReliableEvent( msg );
@@ -3083,7 +3091,7 @@ void CL_LegacyPrecache_f( void )
 	// done with all resources, issue prespawn command.
 	// Include server count in case server disconnects and changes level during d/l
 	MSG_BeginClientCmd( &cls.netchan.message, clc_stringcmd );
-	MSG_WriteString( &cls.netchan.message, va( "begin %i", spawncount ));
+	MSG_WriteStringf( &cls.netchan.message, "begin %i", spawncount );
 	cls.signon = SIGNONS;
 }
 

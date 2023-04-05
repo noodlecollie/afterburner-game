@@ -770,24 +770,6 @@ qboolean Mod_HeadnodeVisible( mnode_t *node, const byte *visbits, int *lastleaf 
 }
 
 /*
-==================
-Mod_AmbientLevels
-
-grab the ambient sound levels for current point
-==================
-*/
-void Mod_AmbientLevels( const vec3_t p, byte *pvolumes )
-{
-	mleaf_t	*leaf;
-
-	if( !worldmodel || !p || !pvolumes )
-		return;
-
-	leaf = Mod_PointInLeaf( p, worldmodel->nodes );
-	*(int *)pvolumes = *(int *)leaf->ambient_sound_level;
-}
-
-/*
 =================
 Mod_FindModelOrigin
 
@@ -1541,7 +1523,10 @@ static void Mod_SetupSubmodels( dbspmodel_t *bmod )
 
 		if( i != 0 )
 		{
-			Mod_FindModelOrigin( ents, va( "*%i", i ), bm->origin );
+			char temp[MAX_VA_STRING];
+
+			Q_snprintf( temp, sizeof( temp ), "*%i", i );
+			Mod_FindModelOrigin( ents, temp, bm->origin );
 
 			// mark models that have origin brushes
 			if( !VectorIsNull( bm->origin ))
@@ -2027,7 +2012,9 @@ static void LoadTexture(dbspmodel_t* bmod, const int32_t* miptexOffsets, uint32_
 			// check wads in reverse order
 			for( wadIndex = bmod->wadlist.count - 1; wadIndex >= 0; --wadIndex )
 			{
-				const char* texpath = va("%s.wad/%s", bmod->wadlist.wadnames[wadIndex], texname);
+				char texpath[MAX_VA_STRING];
+
+				Q_snprintf( texpath, sizeof( texpath ), "%s.wad/%s", bmod->wadlist.wadnames[wadIndex], texname );
 
 				if( FS_FileExists( texpath, false ))
 				{
@@ -2093,7 +2080,9 @@ static void LoadTexture(dbspmodel_t* bmod, const int32_t* miptexOffsets, uint32_
 				// So much duplicated code... :(
 				for( wadIndex = bmod->wadlist.count - 1; wadIndex >= 0; --wadIndex )
 				{
-					const char* texpath = va("%s.wad/%s.mip", bmod->wadlist.wadnames[wadIndex], tx->name);
+					char texpath[MAX_VA_STRING];
+
+					Q_snprintf( texpath, sizeof( texpath ), "%s.wad/%s.mip", bmod->wadlist.wadnames[wadIndex], tx->name );
 
 					if( FS_FileExists( texpath, false ))
 					{
@@ -3405,9 +3394,13 @@ Mod_LoadBrushModel
 */
 void Mod_LoadBrushModel( model_t *mod, const void *buffer, qboolean *loaded )
 {
+	char poolname[MAX_VA_STRING];
+
+	Q_snprintf( poolname, sizeof( poolname ), "^2%s^7", loadmodel->name );
+
 	if( loaded ) *loaded = false;
 
-	loadmodel->mempool = Mem_AllocPool( va( "^2%s^7", loadmodel->name ));
+	loadmodel->mempool = Mem_AllocPool( poolname );
 	loadmodel->type = mod_brush;
 
 	// loading all the lumps into heap

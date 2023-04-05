@@ -70,7 +70,7 @@ SETUP BACKENDS DEFINITIONS
 			#define XASH_MESSAGEBOX MSGBOX_ANDROID
 		#endif // XASH_MESSAGEBOX
 
-		#define XASH_USE_EVDEV
+		#define XASH_USE_EVDEV 1
 		#define XASH_DYNAMIC_DLADDR
 	#elif XASH_LINUX
 		// we are building for Linux without SDL2, can draw only to framebuffer yet
@@ -86,7 +86,7 @@ SETUP BACKENDS DEFINITIONS
 			#define XASH_SOUND SOUND_ALSA
 		#endif // XASH_SOUND
 
-		#define XASH_USE_EVDEV
+		#define XASH_USE_EVDEV 1
 	#elif XASH_DOS4GW
 		#ifndef XASH_VIDEO
 			#define XASH_VIDEO VIDEO_DOS
@@ -190,6 +190,10 @@ Default build-depended cvar and constant values
 #ifndef DEFAULT_M_IGNORE
 	#define DEFAULT_M_IGNORE "0"
 #endif // DEFAULT_M_IGNORE
+
+#ifndef DEFAULT_JOY_DEADZONE
+	#define DEFAULT_JOY_DEADZONE "4096"
+#endif // DEFAULT_JOY_DEADZONE
 
 #ifndef DEFAULT_DEV
 	#define DEFAULT_DEV 0

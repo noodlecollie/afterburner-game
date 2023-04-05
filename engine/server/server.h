@@ -374,9 +374,7 @@ typedef struct
 	entity_state_t	*baselines;		// [GI->max_edicts]
 	entity_state_t	*static_entities;		// [MAX_STATIC_ENTITIES];
 
-	double		last_heartbeat;
 	challenge_t	challenges[MAX_CHALLENGES];	// to prevent invalid IPs from connecting
-	uint		heartbeat_challenge;
 } server_static_t;
 
 //=============================================================================
@@ -443,6 +441,8 @@ extern convar_t		hostname;
 extern convar_t		skill;
 extern convar_t		coop;
 extern convar_t		sv_cheats;
+extern convar_t		public_server;
+extern convar_t		sv_nat;
 
 extern	convar_t		*sv_pausable;		// allows pause in multiplayer
 extern	convar_t		*sv_check_errors;
@@ -451,7 +451,6 @@ extern	convar_t		*sv_lighting_modulate;
 extern	convar_t		*sv_novis;
 extern	convar_t		*sv_hostmap;
 extern	convar_t		*sv_validate_changelevel;
-extern	convar_t		*public_server;
 
 //===========================================================
 //
@@ -588,7 +587,6 @@ void SV_InactivateClients( void );
 int SV_FindBestBaselineForStatic( int index, entity_state_t **baseline, entity_state_t *to );
 void SV_WriteFrameToClient( sv_client_t *client, sizebuf_t *msg );
 void SV_BuildClientFrame( sv_client_t *client );
-void SV_SendMessagesToAll( void );
 void SV_SkipUpdates( void );
 
 //

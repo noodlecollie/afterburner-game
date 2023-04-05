@@ -1,5 +1,6 @@
 /*
 avi_win.c - playing AVI files (based on original AVIKit code, Win32 version)
+Copyright (c) 2003-2004, Ruari O'Sullivan
 Copyright (C) 2010 Uncle Mike
 
 This program is free software: you can redistribute it and/or modify
@@ -63,7 +64,7 @@ static int (_stdcall *pAVIStreamTimeToSample)( PAVISTREAM pavi, LONG lTime );
 static void* (_stdcall *pAVIStreamGetFrame)( PGETFRAME pg, LONG lPos );
 static int (_stdcall *pAVIStreamGetFrameClose)( PGETFRAME pg );
 static dword (_stdcall *pAVIStreamRelease)( PAVISTREAM pavi );
-static int (_stdcall *pAVIFileOpen)( PAVIFILE *ppfile, LPCSTR szFile, UINT uMode, LPCLSID lpHandler );
+static int (_stdcall *pAVIFileOpenW)( PAVIFILE *ppfile, LPCWSTR szFile, UINT uMode, LPCLSID lpHandler );
 static int (_stdcall *pAVIFileGetStream)( PAVIFILE pfile, PAVISTREAM *ppavi, DWORD fccType, LONG lParam );
 static int (_stdcall *pAVIStreamReadFormat)( PAVISTREAM pavi, LONG lPos,LPVOID lpFormat, LONG *lpcbFormat );
 static int (_stdcall *pAVIStreamStart)( PAVISTREAM pavi );
@@ -76,7 +77,7 @@ static dllfunc_t avifile_funcs[] =
 { "AVIFileExit", (void **) &pAVIFileExit },
 { "AVIFileGetStream", (void **) &pAVIFileGetStream },
 { "AVIFileInit", (void **) &pAVIFileInit },
-{ "AVIFileOpenA", (void **) &pAVIFileOpen },
+{ "AVIFileOpenW", (void **) &pAVIFileOpenW },
 { "AVIFileRelease", (void **) &pAVIFileRelease },
 { "AVIStreamGetFrame", (void **) &pAVIStreamGetFrame },
 { "AVIStreamGetFrameClose", (void **) &pAVIStreamGetFrameClose },
@@ -276,14 +277,6 @@ int AVI_GetVideoFrameNumber( movie_state_t *Avi, float time )
 		return 0;
 
 	return (time * Avi->video_fps);
-}
-
-int AVI_GetVideoFrameCount( movie_state_t *Avi )
-{
-	if( !Avi->active )
-		return 0;
-
-	return Avi->video_frames;
 }
 
 int AVI_TimeToSoundPosition( movie_state_t *Avi, int time )
@@ -493,6 +486,7 @@ void AVI_OpenVideo( movie_state_t *Avi, const char *filename, qboolean load_audi
 	AVISTREAMINFO	stream_info;
 	int		opened_streams = 0;
 	LONG		hr;
+	wchar_t		pathBuffer[MAX_PATH];
 
 	// default state: non-working.
 	Avi->active = false;
@@ -501,8 +495,15 @@ void AVI_OpenVideo( movie_state_t *Avi, const char *filename, qboolean load_audi
 	// can't load Video For Windows :-(
 	if( !avi_initialized ) return;
 
+	// convert to wide char
+	if( MultiByteToWideChar( CP_UTF8, 0, filename, -1, pathBuffer, ARRAYSIZE( pathBuffer )) <= 0 )
+	{
+		Con_DPrintf( S_ERROR "filename buffer limit exceeded\n" );
+		return;
+	}
+
 	// load the AVI
-	hr = pAVIFileOpen( &Avi->pfile, filename, OF_SHARE_DENY_WRITE, 0L );
+	hr = pAVIFileOpenW( &Avi->pfile, pathBuffer, OF_SHARE_DENY_WRITE, 0L );
 
 	if( hr != 0 ) // error opening AVI:
 	{
