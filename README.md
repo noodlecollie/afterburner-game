@@ -13,25 +13,21 @@ See [here](https://github.com/x6herbius/afterburner-game/releases). Please note,
 
 ## I want to compile the game from source, how do I do that?
 
-### Prerequisites
+### Game prerequisites
 
-*64-bit builds of the game will be supported in future, but are not at the moment.* Until 64-bit support is properly implemented, 32-bit compilers and libraries are required.
+Ensure that you have Python 3 installed on your computer, as well as the appropriate C/C++ development tools for your platform (Windows and Linux are supported). The required dependencies for the Xash3D engine are listed in the original Xash3D readme [later in this file](#prerequisites) - you should follow the appropriate steps for your platform to install them. Note that for Afterburner, **64-bit builds are now supported and recommended**, but if you want to compile in 32-bit, you will need the 32-bit versions of the dependencies.
 
-Ensure that you have Python 3 installed on your computer, as well as the appropriate C/C++ development tools for your platform (Windows and Linux are supported). You will also need to ensure that the **32-bit development** version of the [SDL2 library](https://www.libsdl.org/download-2.0.php) is installed. If this is not available for download for your platform, you should compile it from source.
+Clone this repository using `git clone --recursive`. If you don't use the `--recursive` switch, the game **will not** compile without manually initialising the subrepositories. If you find yourself needing to do this, run `git submodule update --init --recursive` from within the root directory of the repository.
 
-For detailed information on the prerequisites for your platform, see the Xash3D FWGS readme [here](https://github.com/FWGS/xash3d-fwgs), or at the bottom of this file. Note that some of the 32-bit dependencies on Linux may also need to have their 64-bit counterparts installed in order for the configuration step to correctly detect them; for example, on Ubuntu the `libfreetype-dev` and `libfontconfig1-dev` dependencies need to be installed alongside their `libfreetype-dev:i386` and `libfontconfig1-dev:i386` counterparts.
-
-Finally, clone this repository using `git clone --recursive`. If you don't use the `--recursive` switch, the game **will not** compile without manually initialising the subrepositories. If you find yourself needing to do this, run `git submodule update --init --recursive` from within the root directory of the repository.
-
-### Building
+### Building the game
 
 To build, open a terminal in the root of the repository and call:
 
 ```
-python3 ./waf configure --disable-vgui --win-style-install --build-type=debug --prefix=build/debug
+python3 ./waf configure --64bits --build-type=debug --prefix=build/debug --enable-packaging
 ```
 
-This will set up the build for a debug version of the game. Note that if you downloaded SDL2 from the website and it is not available in the system path, you will need to pass the path to the directory you extracted it to via the `--sdl2` option, eg. `--sdl2=/path/to/SDL2`.
+This will set up the build for a debug version of the game. Note that if you downloaded SDL2 from the SDL website (eg. for a Windows build) and it is not available in the system path, you will need to pass the path to the directory you extracted it to via the `--sdl2` option, eg. `--sdl2=/path/to/SDL2`.
 
 To build the game and copy all output to the `build/debug` folder in the root of the repo, call:
 
@@ -40,16 +36,6 @@ python3 ./waf build install
 ```
 
 For more information, or a list of all available options, run `python3 ./waf --help`. Note that most of these will be for advanced users only.
-
-## Why is Mac not supported any more?
-
-[Apple have deprecated OpenGL support on Mac](https://www.anandtech.com/show/12894/apple-deprecates-opengl-across-all-oses). I'm not gonna lie - this is incredibly irritating, because OpenGL was the easiest way to write graphics-based applications that worked across the three big operating systems. In response, the developers of the Xash3D engine used by Afterburner have decided [not to support the engine on Mac](https://github.com/FWGS/xash3d-fwgs/issues/61), because to do so would now require too much extra work and testing.
-
-If you wish to try compiling the game for Mac then feel free - in theory the engine should be compatible as long as you have a version of MacOS that supports OpenGL. However, I won't be able to help you out, so you'll be on your own.
-
-## I want to contribute!
-
-Since this project is currently only in active development by myself, I don't have any set roadmap or procedure for contributing. If you would like to get involved, please drop me a line (jonathan.poncelet@talk21.com, or [@x6herbius](https://twitter.com/x6herbius) on Twitter) and we can discuss!
 
 ## Credits
 
@@ -68,17 +54,14 @@ For posterity, the Xash3D engine readme is below.
 
 -----
 
-## Xash3D FWGS Engine Readme
-[![Build Status](https://api.travis-ci.org/FWGS/xash3d-fwgs.svg?branch=master)](https://travis-ci.org/FWGS/xash3d-fwgs) [![Discord Server](https://img.shields.io/discord/355697768582610945.svg)](https://discord.gg/TbnHcVb)
-=======
 # Xash3D FWGS Engine
 [![GitHub Actions Status](https://github.com/FWGS/xash3d-fwgs/actions/workflows/c-cpp.yml/badge.svg)](https://github.com/FWGS/xash3d-fwgs/actions/workflows/c-cpp.yml) [![FreeBSD Build Status](https://img.shields.io/cirrus/github/FWGS/xash3d-fwgs?label=freebsd%20build)](https://cirrus-ci.com/github/FWGS/xash3d-fwgs) [![Discord Server](https://img.shields.io/discord/355697768582610945.svg)](http://fwgsdiscord.mentality.rip/) \
-[![Download Stable](https://img.shields.io/badge/download-stable-yellow)](https://github.com/FWGS/xash3d-fwgs/releases/latest) [![Download Testing](https://img.shields.io/badge/downloads-testing-orange)](https://github.com/FWGS/xash3d-fwgs/releases/tag/continuous) 
+[![Download Stable](https://img.shields.io/badge/download-stable-yellow)](https://github.com/FWGS/xash3d-fwgs/releases/latest) [![Download Testing](https://img.shields.io/badge/downloads-testing-orange)](https://github.com/FWGS/xash3d-fwgs/releases/tag/continuous)
 
 Xash3D FWGS is a fork of Xash3D Engine by Unkle Mike with extended features and crossplatform.
 
 ```
-Xash3D is a game engine, aimed to provide compatibility with Half-Life Engine, 
+Xash3D is a game engine, aimed to provide compatibility with Half-Life Engine,
 as well as to give game developers well known workflow and extend it.
 Read more about Xash3D on ModDB: https://www.moddb.com/engines/xash3d-engine
 ```
