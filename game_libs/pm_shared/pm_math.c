@@ -1,9 +1,9 @@
 /***
 *
 *	Copyright (c) 1996-2002, Valve LLC. All rights reserved.
-*	
-*	This product contains software technology licensed from Id 
-*	Software, Inc. ("Id Technology").  Id Technology (c) 1996 Id Software, Inc. 
+*
+*	This product contains software technology licensed from Id
+*	Software, Inc. ("Id Technology").  Id Technology (c) 1996 Id Software, Inc.
 *	All Rights Reserved.
 *
 *   Use, distribution, and modification of this source code and/or resulting
@@ -23,14 +23,13 @@
 // left / right
 #define	YAW	1
 // fall over
-#define	ROLL	2 
+#define	ROLL	2
 
 #ifdef _MSC_VER
 #pragma warning(disable : 4244)
 #endif
 
 vec3_t vec3_origin = { 0,0,0 };
-int nanmask = 255 << 23;
 
 float anglemod( float a )
 {
@@ -77,7 +76,7 @@ void AngleVectorsTranspose( const vec3_t angles, vec3_t forward, vec3_t right, v
 {
 	float angle;
 	float sr, sp, sy, cr, cp, cy;
-	
+
 	angle = angles[YAW] * ( M_PI * 2 / 360 );
 	sy = sin( angle );
 	cy = cos( angle );
@@ -214,7 +213,7 @@ void InterpolateAngles( float *start, float *end, float *output, float frac )
 			d -= 360;
 		}
 		else if( d < -180 )
-		{	
+		{
 			d += 360;
 		}
 
@@ -370,11 +369,11 @@ void VectorMatrix( vec3_t forward, vec3_t right, vec3_t up )
 
 	if( forward[0] == 0 && forward[1] == 0 )
 	{
-		right[0] = 1;	
-		right[1] = 0; 
+		right[0] = 1;
+		right[1] = 0;
 		right[2] = 0;
-		up[0] = -forward[2]; 
-		up[1] = 0; 
+		up[0] = -forward[2];
+		up[1] = 0;
 		up[2] = 0;
 		return;
 	}
