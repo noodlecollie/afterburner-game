@@ -112,9 +112,20 @@ UTIL_SharedRandomFloat
 */
 float UTIL_SharedRandomFloat( unsigned int seed, float low, float high )
 {
-	unsigned int range;
+	union FloatInt
+	{
+		float f;
+		int i;
+	};
 
-	U_Srand( (int)seed + *(int *)&low + *(int *)&high );
+	unsigned int range;
+	FloatInt lowVal;
+	FloatInt highVal;
+
+	lowVal.f = low;
+	highVal.f = high;
+
+	U_Srand( (int)seed + lowVal.i + highVal.i );
 
 	U_Random();
 	U_Random();
