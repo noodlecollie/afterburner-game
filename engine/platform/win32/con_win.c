@@ -486,7 +486,7 @@ void Wcon_WinPrint( const char *pMsg )
 		Wcon_PrintInternal( s_wcd.consoleText, s_wcd.consoleTextLen );
 	}
 
-	if( !s_wcd.attached ) 
+	if( !s_wcd.attached )
 		Wcon_UpdateStatusLine();
 }
 
@@ -516,7 +516,7 @@ void Wcon_CreateConsole( void )
 
 	s_wcd.attached = ( AttachConsole( ATTACH_PARENT_PROCESS ) != 0 );
 	if( s_wcd.attached ) {
-		GetConsoleTitle( &s_wcd.previousTitle, sizeof( s_wcd.previousTitle ));
+		GetConsoleTitle( s_wcd.previousTitle, sizeof( s_wcd.previousTitle ));
 		s_wcd.previousCodePage = GetConsoleCP();
 		s_wcd.previousOutputCodePage = GetConsoleOutputCP();
 	}
@@ -532,7 +532,7 @@ void Wcon_CreateConsole( void )
 	s_wcd.hInput = GetStdHandle( STD_INPUT_HANDLE );
 	s_wcd.hOutput = GetStdHandle( STD_OUTPUT_HANDLE );
 	s_wcd.inputEnabled = true;
-	
+
 	if( !SetConsoleCtrlHandler( &Wcon_HandleConsole, TRUE ))
 	{
 		Con_Reportf( S_ERROR "Couldn't attach console handler function\n" );
@@ -540,7 +540,7 @@ void Wcon_CreateConsole( void )
 	}
 
 	if( !s_wcd.attached )
-	{ 
+	{
 		SetWindowPos( s_wcd.hWnd, HWND_TOP, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOREPOSITION | SWP_SHOWWINDOW );
 
 		// show console if needed
@@ -591,7 +591,7 @@ void Wcon_DestroyConsole( void )
 	Sys_CloseLog();
 
 	if( !s_wcd.attached )
-	{ 
+	{
 		if( s_wcd.hWnd )
 		{
 			ShowWindow( s_wcd.hWnd, SW_HIDE );
@@ -603,7 +603,7 @@ void Wcon_DestroyConsole( void )
 		// reverts title & code page for console window that was before starting Xash3D
 		SetConsoleCP( s_wcd.previousCodePage );
 		SetConsoleOutputCP( s_wcd.previousOutputCodePage );
-		SetConsoleTitle( &s_wcd.previousTitle );
+		SetConsoleTitle( s_wcd.previousTitle );
 		Con_Printf( "Press Enter to continue...\n" );
 	}
 
@@ -626,7 +626,7 @@ char *Wcon_Input( void )
 	DWORD i;
 	DWORD eventsCount;
 	static INPUT_RECORD events[1024];
-	
+
 	if( !s_wcd.inputEnabled )
 		return NULL;
 
