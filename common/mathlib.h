@@ -28,9 +28,15 @@ typedef vec_t vec4_t[4];	// x,y,z,w
 struct mplane_s;
 
 extern vec3_t vec3_origin;
-extern	int nanmask;
 
-#define	IS_NAN(x) (((*(int *)&x)&nanmask)==nanmask)
+#ifdef XASH_IRIX
+#undef isnan
+#endif
+#ifdef isnan // check for C99 isnan
+#define IS_NAN isnan
+#else
+#define IS_NAN(x)		(((*(int *)&x) & (255<<23)) == (255<<23))
+#endif
 
 #ifndef VECTOR_H
 	#define DotProduct(x,y) ((x)[0]*(y)[0]+(x)[1]*(y)[1]+(x)[2]*(y)[2])

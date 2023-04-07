@@ -159,7 +159,7 @@ static void SV_BanID_f( void )
 	cidfilter = filter;
 
 	if( cl && !Q_stricmp( Cmd_Argv( Cmd_Argc() - 1 ), "kick" ))
-		Cbuf_AddText( va( "kick #%d \"Kicked and banned\"\n", cl->userid ));
+		Cbuf_AddTextf( "kick #%d \"Kicked and banned\"\n", cl->userid );
 }
 
 static void SV_ListID_f( void )
@@ -383,7 +383,7 @@ qboolean SV_CheckIP( netadr_t *adr )
 static void SV_AddIP_PrintUsage( void )
 {
 	Con_Printf(S_USAGE "addip <minutes> <ipaddress>\n"
-		S_USAGE_INDENT  "addip <minutes> <ipaddress/CIDR>\n"
+		S_USAGE_INDENT "addip <minutes> <ipaddress/CIDR>\n"
 		"Use 0 minutes for permanent\n"
 		"ipaddress A.B.C.D/24 is equivalent to A.B.C.0 and A.B.C\n"
 		"NOTE: IPv6 addresses only support prefix format!\n");
@@ -392,7 +392,7 @@ static void SV_AddIP_PrintUsage( void )
 static void SV_RemoveIP_PrintUsage( void )
 {
 	Con_Printf(S_USAGE "removeip <ipaddress> [removeAll]\n"
-		S_USAGE_INDENT  "removeip <ipaddress/CIDR> [removeAll]\n"
+		S_USAGE_INDENT "removeip <ipaddress/CIDR> [removeAll]\n"
 		"Use removeAll to delete all ip filters which ipaddress or ipaddress/CIDR includes\n");
 }
 

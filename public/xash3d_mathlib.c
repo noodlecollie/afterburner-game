@@ -53,27 +53,9 @@ float anglemod( float a )
 	return a;
 }
 
-/*
-=================
-SimpleSpline
-
-NOTE: ripped from hl2 source
-hermite basis function for smooth interpolation
-Similar to Gain() above, but very cheap to call
-value should be between 0 & 1 inclusive
-=================
-*/
-float SimpleSpline( float value )
-{
-	float	valueSquared = value * value;
-
-	// nice little ease-in, ease-out spline-like curve
-	return (3.0f * valueSquared - 2.0f * valueSquared * value);
-}
-
 word FloatToHalf( float v )
 {
-	unsigned int	i = *((unsigned int *)&v);
+	unsigned int	i = FloatAsUint( v );
 	unsigned int	e = (i >> 23) & 0x00ff;
 	unsigned int	m = i & 0x007fffff;
 	unsigned short	h;
@@ -115,7 +97,7 @@ float HalfToFloat( word h )
 		}
 	}
 
-	return *((float *)&f);
+	return UintAsFloat( f );
 }
 
 /*
@@ -203,49 +185,6 @@ int PlaneTypeForNormal( const vec3_t normal )
 
 /*
 =================
-PlanesGetIntersectionPoint
-
-=================
-*/
-qboolean PlanesGetIntersectionPoint( const mplane_t *plane1, const mplane_t *plane2, const mplane_t *plane3, vec3_t out )
-{
-	vec3_t	n1, n2, n3;
-	vec3_t	n1n2, n2n3, n3n1;
-	float	denom;
-
-	VectorNormalize2( plane1->normal, n1 );
-	VectorNormalize2( plane2->normal, n2 );
-	VectorNormalize2( plane3->normal, n3 );
-
-	CrossProduct( n1, n2, n1n2 );
-	CrossProduct( n2, n3, n2n3 );
-	CrossProduct( n3, n1, n3n1 );
-
-	denom = DotProduct( n1, n2n3 );
-	VectorClear( out );
-
-	// check if the denominator is zero (which would mean that no intersection is to be found
-	if( denom == 0.0f )
-	{
-		// no intersection could be found, return <0,0,0>
-		return false;
-	}
-
-	// compute intersection point
-#if 0
-	VectorMAMAM( plane1->dist, n2n3, plane2->dist, n3n1, plane3->dist, n1n2, out );
-#else
-	VectorMA( out, plane1->dist, n2n3, out );
-	VectorMA( out, plane2->dist, n3n1, out );
-	VectorMA( out, plane3->dist, n1n2, out );
-#endif
-	VectorScale( out, ( 1.0f / denom ), out );
-
-	return true;
-}
-
-/*
-=================
 NearestPOW
 =================
 */
@@ -296,9 +235,9 @@ float rsqrt( float number )
 		return 0.0f;
 
 	x = number * 0.5f;
-	i = *(int *)&number;	// evil floating point bit level hacking
+	i = FloatAsInt( number );	// evil floating point bit level hacking
 	i = 0x5f3759df - (i >> 1);	// what the fuck?
-	y = *(float *)&i;
+	y = IntAsFloat( i );
 	y = y * (1.5f - (x * y * y));	// first iteration
 
 	return y;

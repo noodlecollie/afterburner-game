@@ -819,6 +819,7 @@ int CL_DrawCharacter( float x, float y, int number, rgba_t color, cl_font_t *fon
 int CL_DrawString( float x, float y, const char *s, rgba_t color, cl_font_t *font, int flags );
 void CL_DrawCharacterLen( cl_font_t *font, int number, int *width, int *height );
 void CL_DrawStringLen( cl_font_t *font, const char *s, int *width, int *height, int flags );
+int CL_DrawStringf( cl_font_t *font, float x, float y, rgba_t color, int flags, const char *fmt, ... ) _format( 6 );
 
 
 //
@@ -836,7 +837,6 @@ void CL_FreeEdicts( void );
 void CL_ClearWorld( void );
 void CL_DrawCenterPrint( void );
 void CL_ClearSpriteTextures( void );
-void CL_FreeEntity( cl_entity_t *pEdict );
 void CL_CenterPrint( const char *text, float y );
 void CL_TextMessageParse( byte *pMemFile, int fileSize );
 client_textmessage_t *CL_TextMessageGet( const char *pName );
@@ -893,7 +893,6 @@ void CL_ParseLegacyServerMessage( sizebuf_t *msg, qboolean normal_message );
 void CL_LegacyPrecache_f( void );
 
 void CL_ParseTempEntity( sizebuf_t *msg );
-void CL_StartResourceDownloading( const char *pszMessage, qboolean bCustom );
 qboolean CL_DispatchUserMessage( const char *pszName, int iSize, void *pbuf );
 qboolean CL_RequestMissingResources( void );
 void CL_RegisterResources ( sizebuf_t *msg );
@@ -1005,7 +1004,6 @@ const ref_overview_t *GL_GetOverviewParms( void );
 //
 void R_StoreEfrags( efrag_t **ppefrag, int framecount );
 void R_AddEfrags( cl_entity_t *ent );
-void R_RemoveEfrags( cl_entity_t *ent );
 //
 // cl_tent.c
 //
@@ -1160,7 +1158,6 @@ void CL_PlayVideo_f( void );
 // keys.c
 //
 int Key_IsDown( int keynum );
-const char *Key_IsBind( int keynum );
 void Key_Event( int key, int down );
 void Key_Init( void );
 void Key_WriteBindings( file_t *f );

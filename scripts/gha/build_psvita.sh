@@ -8,7 +8,6 @@ build_hlsdk()
 	git checkout $1
 	./waf configure -T release --psvita || die_configure
 	./waf build install --destdir=../pkgtemp/data/xash3d || die
-	./waf clean
 }
 
 export VITASDK=/usr/local/vitasdk
@@ -23,11 +22,11 @@ mkdir -p artifacts/ || die
 
 echo "Building vitaGL..."
 
-make -C vitaGL NO_TEX_COMBINER=1 HAVE_UNFLIPPED_FBOS=1 HAVE_PTHREAD=1 SINGLE_THREADED_GC=1 MATH_SPEEDHACK=1 DRAW_SPEEDHACK=1 HAVE_CUSTOM_HEAP=1 -j2 install || die
+make -C vitaGL NO_TEX_COMBINER=1 HAVE_UNFLIPPED_FBOS=1 HAVE_PTHREAD=1 MATH_SPEEDHACK=1 DRAW_SPEEDHACK=1 HAVE_CUSTOM_HEAP=1 -j2 install || die
 
 echo "Building vrtld..."
 
-pushd vita-rtld
+pushd vita-rtld || die
 cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=Release || die_configure
 cmake --build build -- -j2 || die
 cmake --install build || die
@@ -35,7 +34,7 @@ popd
 
 echo "Building SDL..."
 
-pushd SDL
+pushd SDL || die
 cmake -S. -Bbuild -DCMAKE_TOOLCHAIN_FILE=${VITASDK}/share/vita.toolchain.cmake -DCMAKE_BUILD_TYPE=Release -DVIDEO_VITA_VGL=ON || die_configure
 cmake --build build -- -j2 || die
 cmake --install build || die
@@ -49,11 +48,10 @@ cp build/engine/xash.vpk pkgtemp/
 
 echo "Building HLSDK..."
 
-# TODO: replace with hlsdk-portable and the correct branch names when PRs are merged
-pushd hlsdk-xash3d
-build_hlsdk vita-mobile_hacks valve
-build_hlsdk vita-opfor gearbox
-build_hlsdk vita-bshift bshift
+pushd hlsdk-portable || die
+build_hlsdk mobile_hacks valve
+build_hlsdk opfor gearbox
+build_hlsdk bshift bshift
 popd
 
 echo "Generating default config files..."
@@ -93,6 +91,6 @@ popd
 
 echo "Packaging artifacts..."
 
-pushd pkgtemp
+pushd pkgtemp || die
 7z a -t7z ../artifacts/xash3d-fwgs-psvita.7z -m0=lzma2 -mx=9 -mfb=64 -md=32m -ms=on -r xash.vpk data/
 popd

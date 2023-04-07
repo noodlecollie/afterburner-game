@@ -26,9 +26,15 @@
 struct mplane_s;
 
 extern vec3_t vec3_origin;
-extern	int nanmask;
 
-#define	IS_NAN(x) (((*(int *)&x)&nanmask)==nanmask)
+#ifdef XASH_IRIX
+#undef isnan
+#endif
+#ifdef isnan // check for C99 isnan
+#define IS_NAN isnan
+#else
+#define IS_NAN(x)		(((*(int *)&x) & (255<<23)) == (255<<23))
+#endif
 
 void VectorMA (const vec3_t veca, float scale, const vec3_t vecb, vec3_t vecc);
 

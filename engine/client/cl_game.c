@@ -589,7 +589,11 @@ static void CL_InitTitles( const char *filename )
 	// initialize text messages (game_text)
 	for( i = 0; i < MAX_TEXTCHANNELS; i++ )
 	{
-		cl_textmessage[i].pName = _copystring( clgame.mempool, va( TEXT_MSGNAME, i ), __FILE__, __LINE__ );
+		char name[MAX_VA_STRING];
+
+		Q_snprintf( name, sizeof( name ), TEXT_MSGNAME, i );
+
+		cl_textmessage[i].pName = _copystring( clgame.mempool, name, __FILE__, __LINE__ );
 		cl_textmessage[i].pMessage = cl_textbuffer[i];
 	}
 
@@ -1061,13 +1065,6 @@ void CL_LinkUserMessage( char *pszName, const int svc_num, int iSize )
 	CL_ClearUserMessage( pszName, svc_num );
 }
 
-void CL_FreeEntity( cl_entity_t *pEdict )
-{
-	Assert( pEdict != NULL );
-	R_RemoveEfrags( pEdict );
-	CL_KillDeadBeams( pEdict );
-}
-
 void CL_ClearWorld( void )
 {
 	cl_entity_t	*worldmodel;
@@ -1369,7 +1366,7 @@ pfnSPR_Frames
 */
 int EXPORT pfnSPR_Frames( HSPRITE hPic )
 {
-	int	numFrames;
+	int	numFrames = 0;
 
 	ref.dllFuncs.R_GetSpriteParms( NULL, NULL, &numFrames, 0, CL_GetSpritePointer( hPic ));
 
@@ -1384,7 +1381,7 @@ pfnSPR_Height
 */
 static int GAME_EXPORT pfnSPR_Height( HSPRITE hPic, int frame )
 {
-	int	sprHeight;
+	int	sprHeight = 0;
 
 	ref.dllFuncs.R_GetSpriteParms( NULL, &sprHeight, NULL, frame, CL_GetSpritePointer( hPic ));
 
@@ -1399,7 +1396,7 @@ pfnSPR_Width
 */
 static int GAME_EXPORT pfnSPR_Width( HSPRITE hPic, int frame )
 {
-	int	sprWidth;
+	int	sprWidth = 0;
 
 	ref.dllFuncs.R_GetSpriteParms( &sprWidth, NULL, NULL, frame, CL_GetSpritePointer( hPic ));
 
@@ -1414,7 +1411,13 @@ pfnSPR_Set
 */
 static void GAME_EXPORT pfnSPR_Set( HSPRITE hPic, int r, int g, int b )
 {
-	clgame.ds.pSprite = CL_GetSpritePointer( hPic );
+	const model_t *sprite = CL_GetSpritePointer( hPic );
+
+	// a1ba: do not alter the state if invalid HSPRITE was passed
+	if( !sprite )
+		return;
+
+	clgame.ds.pSprite = sprite;
 	clgame.ds.spriteColor[0] = bound( 0, r, 255 );
 	clgame.ds.spriteColor[1] = bound( 0, g, 255 );
 	clgame.ds.spriteColor[2] = bound( 0, b, 255 );
@@ -1741,14 +1744,12 @@ pfnServerCmd
 */
 static int GAME_EXPORT pfnServerCmd( const char *szCmdString )
 {
-	string	buf;
-
 	if( !COM_CheckString( szCmdString ))
 		return 0;
 
 	// just like the client typed "cmd xxxxx" at the console
-	Q_snprintf( buf, sizeof( buf ) - 1, "cmd %s\n", szCmdString );
-	Cbuf_AddText( buf );
+	MSG_BeginClientCmd( &cls.netchan.message, clc_stringcmd );
+	MSG_WriteString( &cls.netchan.message, szCmdString );
 
 	return 1;
 }
@@ -1876,7 +1877,11 @@ client_textmessage_t *CL_TextMessageGet( const char *pName )
 	// first check internal messages
 	for( i = 0; i < MAX_TEXTCHANNELS; i++ )
 	{
-		if( !Q_strcmp( pName, va( TEXT_MSGNAME, i )))
+		char name[MAX_VA_STRING];
+
+		Q_snprintf( name, sizeof( name ), TEXT_MSGNAME, i );
+
+		if( !Q_strcmp( pName, name ))
 			return cl_textmessage + i;
 	}
 

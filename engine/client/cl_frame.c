@@ -241,7 +241,7 @@ CL_GetStudioEstimatedFrame
 
 ====================
 */
-float CL_GetStudioEstimatedFrame( cl_entity_t *ent )
+static float CL_GetStudioEstimatedFrame( cl_entity_t *ent )
 {
 	studiohdr_t	*pstudiohdr;
 	mstudioseqdesc_t	*pseqdesc;
@@ -255,7 +255,7 @@ float CL_GetStudioEstimatedFrame( cl_entity_t *ent )
 		{
 			sequence = bound( 0, ent->curstate.sequence, pstudiohdr->numseq - 1 );
 			pseqdesc = (mstudioseqdesc_t *)((byte *)pstudiohdr + pstudiohdr->seqindex) + sequence;
-			return ref.dllFuncs.R_StudioEstimateFrame( ent, pseqdesc );
+			return ref.dllFuncs.R_StudioEstimateFrame( ent, pseqdesc, cl.time );
 		}
 	}
 
@@ -971,8 +971,24 @@ all the visible entities should pass this filter
 */
 qboolean CL_AddVisibleEntity( cl_entity_t *ent, int entityType )
 {
+	qboolean draw_player = true;
+
 	if( !ent || !ent->model )
 		return false;
+
+	// don't add the player in firstperson mode
+	if( RP_LOCALCLIENT( ent ))
+	{
+		cl.local.apply_effects = true;
+
+		if( !CL_IsThirdPerson( ) && ( ent->index == cl.viewentity ))
+		{
+			// we don't draw player in default renderer in firstperson mode
+			// but let the client.dll know about player entity anyway
+			// for use in custom renderers
+			draw_player = false;
+		}
+	}
 
 	// check for adding this entity
 	if( !clgame.dllFuncs.pfnAddEntity( entityType, ent, ent->model->name ))
@@ -983,14 +999,8 @@ qboolean CL_AddVisibleEntity( cl_entity_t *ent, int entityType )
 		return false;
 	}
 
-	// don't add the player in firstperson mode
-	if( RP_LOCALCLIENT( ent ))
-	{
-		cl.local.apply_effects = true;
-
-		if( !CL_IsThirdPerson( ) && ( ent->index == cl.viewentity ))
-			return false;
-	}
+	if( !draw_player )
+		return false;
 
 	if( entityType == ET_BEAM )
 	{

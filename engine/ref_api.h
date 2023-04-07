@@ -33,7 +33,8 @@ GNU General Public License for more details.
 // 1. Initial release
 // 2. FS functions are removed, instead we have full fs_api_t
 // 3. SlerpBones, CalcBonePosition/Quaternion calls were moved to libpublic/mathlib
-#define REF_API_VERSION 3
+// 4. R_StudioEstimateFrame now has time argument
+#define REF_API_VERSION 4
 
 
 #define TF_SKY		(TF_SKYSIDE|TF_NOMIPMAP)
@@ -501,7 +502,7 @@ typedef struct ref_interface_s
 	void (*R_ClearAllDecals)( void );
 
 	// studio interface
-	float (*R_StudioEstimateFrame)( cl_entity_t *e, mstudioseqdesc_t *pseqdesc );
+	float (*R_StudioEstimateFrame)( cl_entity_t *e, mstudioseqdesc_t *pseqdesc, double time );
 	void (*R_StudioLerpMovement)( cl_entity_t *e, double time, vec3_t origin, vec3_t angles );
 	void (*CL_InitStudioAPI)( void );
 
@@ -622,9 +623,6 @@ typedef struct ref_interface_s
 
 typedef int (*REFAPI)( int version, ref_interface_t *pFunctionTable, ref_api_t* engfuncs, ref_globals_t *pGlobals );
 #define GET_REF_API "GetRefAPI"
-
-typedef void (*REF_HUMANREADABLE_NAME)( char *out, size_t len );
-#define GET_REF_HUMANREADABLE_NAME "GetRefHumanReadableName"
 
 #ifdef REF_DLL
 #define DEFINE_ENGINE_SHARED_CVAR( x, y ) cvar_t *x = NULL;
