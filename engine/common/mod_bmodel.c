@@ -2035,156 +2035,6 @@ static void Mod_LoadMarkSurfaces( dbspmodel_t *bmod )
 	}
 }
 
-static void Mod_LoadTextureData( dbspmodel_t *bmod, int textureIndex )
-{
-#if !XASH_DEDICATED
-	texture_t *texture = NULL;
-	mip_t *mipTex = NULL;
-	qboolean usesCustomPalette = false;
-	uint32_t txFlags = 0;
-
-	// Don't load texture data on dedicated server, as there is no renderer.
-	// FIXME: for ENGINE_IMPROVED_LINETRACE we need to load textures on server too
-	// but there is no facility for this yet
-	if( Host_IsDedicated( ))
-		return;
-
-	texture = loadmodel->textures[textureIndex];
-	mipTex = Mod_GetMipTexForTexture( bmod, textureIndex );
-
-	if( FBitSet( host.features, ENGINE_IMPROVED_LINETRACE ) && mipTex->name[0] == '{' )
-		SetBits( txFlags, TF_KEEP_SOURCE ); // Paranoia2 texture alpha-tracing
-
-	usesCustomPalette = Mod_CalcMipTexUsesCustomPalette( bmod, textureIndex );
-
-	// check for multi-layered sky texture (quake1 specific)
-	if( bmod->isworld && Q_strncmp( mipTex->name, "sky", 3 ) == 0 && ( mipTex->width / mipTex->height ) == 2 )
-	{
-		ref.dllFuncs.R_InitSkyClouds( mipTex, texture, usesCustomPalette ); // load quake sky
-
-		if( R_GetBuiltinTexture( REF_SOLIDSKY_TEXTURE ) && R_GetBuiltinTexture( REF_ALPHASKY_TEXTURE ))
-			SetBits( world.flags, FWORLD_SKYSPHERE );
-
-		// No texture to load in this case, so just exit.
-		return;
-	}
-
-	// Texture loading order:
-	// 1. From WAD
-	// 2. Internal from map
-
-	// Try WAD texture (force while r_wadtextures is 1)
-	if(( r_wadtextures->value && bmod->wadlist.count > 0 ) || mipTex->offsets[0] <= 0 )
-	{
-		char texpath[MAX_VA_STRING];
-		int wadIndex = Mod_FindTextureInWadList( &bmod->wadlist, mipTex->name, texpath, sizeof( texpath ));
-
-		if( wadIndex >= 0 )
-		{
-			texture->gl_texturenum = ref.dllFuncs.GL_LoadTexture( texpath, NULL, 0, txFlags );
-			bmod->wadlist.wadusage[wadIndex]++;
-		}
-	}
-
-	// WAD failed, so use internal texture (if present)
-	if( mipTex->offsets[0] > 0 && texture->gl_texturenum == 0 )
-	{
-		char texName[64];
-		const size_t size = Mod_CalculateMipTexSize( mipTex, usesCustomPalette );
-
-		Q_snprintf( texName, sizeof( texName ), "#%s:%s.mip", loadstat.name, mipTex->name );
-		texture->gl_texturenum = ref.dllFuncs.GL_LoadTexture( texName, (byte *)mipTex, size, txFlags );
-	}
-
-	// If texture is completely missed:
-	if( texture->gl_texturenum == 0 )
-	{
-		Con_DPrintf( S_ERROR "Unable to find %s.mip\n", mipTex->name );
-		texture->gl_texturenum = R_GetBuiltinTexture( REF_DEFAULT_TEXTURE );
-	}
-
-	// Check for luma texture
-	if( FBitSet( REF_GET_PARM( PARM_TEX_FLAGS, texture->gl_texturenum ), TF_HAS_LUMA ))
-	{
-		char texName[64];
-		Q_snprintf( texName, sizeof( texName ), "#%s:%s_luma.mip", loadstat.name, mipTex->name );
-
-		if( mipTex->offsets[0] > 0 )
-		{
-			const size_t size = Mod_CalculateMipTexSize( mipTex, usesCustomPalette );
-			texture->fb_texturenum = ref.dllFuncs.GL_LoadTexture( texName, (byte *)mipTex, size, TF_MAKELUMA );
-		}
-		else
-		{
-			char texpath[MAX_VA_STRING];
-			int wadIndex;
-			fs_offset_t srcSize = 0;
-			byte* src = NULL;
-
-			// NOTE: We can't load the _luma texture from the WAD as normal because it
-			// doesn't exist there. The original texture is already loaded, but cannot be modified.
-			// Instead, load the original texture again and convert it to luma.
-
-			wadIndex = Mod_FindTextureInWadList( &bmod->wadlist, texture->name, texpath, sizeof( texpath ));
-
-			if( wadIndex >= 0 )
-			{
-				src = FS_LoadFile( texpath, &srcSize, false );
-				bmod->wadlist.wadusage[wadIndex]++;
-			}
-
-			// OK, loading it from wad or hi-res version
-			texture->fb_texturenum = ref.dllFuncs.GL_LoadTexture( texName, src, srcSize, TF_MAKELUMA );
-
-			if( src )
-				Mem_Free( src );
-		}
-	}
-#endif // !XASH_DEDICATED
-}
-
-static void Mod_LoadTexture( dbspmodel_t *bmod, int textureIndex )
-{
-	texture_t *texture;
-	mip_t *mipTex;
-
-	if( textureIndex < 0 || textureIndex >= loadmodel->numtextures )
-		return;
-
-	mipTex = Mod_GetMipTexForTexture( bmod, textureIndex );
-
-	if( !mipTex )
-	{
-		// No data for this texture.
-		// Create default texture (some mods require this).
-		Mod_CreateDefaultTexture( &loadmodel->textures[textureIndex] );
-		return;
-	}
-
-	if( mipTex->name[0] == '\0' )
-		Q_snprintf( mipTex->name, sizeof( mipTex->name ), "miptex_%i", textureIndex );
-
-	texture = (texture_t *)Mem_Calloc( loadmodel->mempool, sizeof( *texture ));
-	loadmodel->textures[textureIndex] = texture;
-
-	// Ensure texture name is lowercase.
-	Q_strncpy( texture->name, mipTex->name, sizeof( texture->name ));
-	Q_strnlwr( texture->name, texture->name, sizeof( texture->name ));
-
-	texture->width = mipTex->width;
-	texture->height = mipTex->height;
-
-	Mod_LoadTextureData( bmod, textureIndex );
-}
-
-static void Mod_LoadAllTextures( dbspmodel_t *bmod )
-{
-	int i;
-
-	for( i = 0; i < loadmodel->numtextures; i++ )
-		Mod_LoadTexture( bmod, i );
-}
-
 static void Mod_SequenceAnimatedTexture( int baseTextureIndex )
 {
 	texture_t *anims[10];
@@ -2311,48 +2161,12 @@ static void Mod_SequenceAnimatedTexture( int baseTextureIndex )
 	}
 }
 
-static void Mod_SequenceAllAnimatedTextures( void )
+static void Mod_SequenceAllAnimatedTextures( int base )
 {
 	int i;
 
-	for( i = 0; i < loadmodel->numtextures; i++ )
+	for( i = base; i < loadmodel->numtextures; i++ )
 		Mod_SequenceAnimatedTexture( i );
-}
-
-/*
-=================
-Mod_LoadTextures
-=================
-*/
-static void Mod_LoadTextures( dbspmodel_t *bmod )
-{
-	dmiptexlump_t *lump;
-
-#if !XASH_DEDICATED
-	// release old sky layers first
-	if( !Host_IsDedicated() && bmod->isworld )
-	{
-		ref.dllFuncs.GL_FreeTexture( R_GetBuiltinTexture( REF_ALPHASKY_TEXTURE ));
-		ref.dllFuncs.GL_FreeTexture( R_GetBuiltinTexture( REF_SOLIDSKY_TEXTURE ));
-	}
-#endif
-
-	lump = bmod->textures;
-
-	if( bmod->texdatasize < 1 || !lump || lump->nummiptex < 1 )
-	{
-		(*texture)->gl_texturenum = R_GetBuiltinTexture( REF_DEFAULT_TEXTURE );
-		(*texture)->width = 16;
-		(*texture)->height = 16;
-	}
-#endif // XASH_DEDICATED
-}
-
-	loadmodel->textures = (texture_t **)Mem_Calloc( loadmodel->mempool, lump->nummiptex * sizeof( texture_t * ));
-	loadmodel->numtextures = lump->nummiptex;
-
-	Mod_LoadAllTextures( bmod );
-	Mod_SequenceAllAnimatedTextures();
 }
 
 static qboolean LoadPNGTextureData(const dpngtexturepath_t* in, texture_t** out, const char* texName)
@@ -2394,7 +2208,7 @@ static qboolean LoadPNGTextureData(const dpngtexturepath_t* in, texture_t** out,
 
 	if ( !success )
 	{
-		CreateDefaultTexture(out);
+		Mod_CreateDefaultTexture(out);
 	}
 
 	return success;
@@ -2464,7 +2278,7 @@ static void LoadPNGTexture(const dpngtexturepath_t* in, texture_t** out)
 				   loadmodel->name,
 				   path);
 
-		CreateDefaultTexture(out);
+		Mod_CreateDefaultTexture(out);
 		return;
 	}
 
@@ -2480,63 +2294,154 @@ static void LoadPNGTexture(const dpngtexturepath_t* in, texture_t** out)
 	LoadTextureProperties(*out, nameBuffer);
 }
 
-static void LoadEmbeddedMiptex(dbspmodel_t* bmod, const int32_t* offsets, uint32_t index, texture_t** out)
+static void Mod_LoadTextureData( dbspmodel_t *bmod, int textureIndex, qboolean allowWAD )
 {
-	const byte* base = (const byte*)bmod->textures;
-	const uint32_t totalSize = bmod->texdatasize;
-	const mip_t* miptex = NULL;
-	uint32_t area = 0;
-	qboolean custom_palette = false;
-	const int32_t offset = offsets[index];
+#if !XASH_DEDICATED
+	texture_t *texture = NULL;
+	mip_t *mipTex = NULL;
+	qboolean usesCustomPalette = false;
+	uint32_t txFlags = 0;
 
-	if ( offset + sizeof(mip_t) > totalSize )
+	// Don't load texture data on dedicated server, as there is no renderer.
+	// FIXME: for ENGINE_IMPROVED_LINETRACE we need to load textures on server too
+	// but there is no facility for this yet
+	if( Host_IsDedicated( ))
+		return;
+
+	texture = loadmodel->textures[textureIndex];
+	mipTex = Mod_GetMipTexForTexture( bmod, textureIndex );
+
+	if( FBitSet( host.features, ENGINE_IMPROVED_LINETRACE ) && mipTex->name[0] == '{' )
+		SetBits( txFlags, TF_KEEP_SOURCE ); // Paranoia2 texture alpha-tracing
+
+	usesCustomPalette = Mod_CalcMipTexUsesCustomPalette( bmod, textureIndex );
+
+	// check for multi-layered sky texture (quake1 specific)
+	if( bmod->isworld && Q_strncmp( mipTex->name, "sky", 3 ) == 0 && ( mipTex->width / mipTex->height ) == 2 )
 	{
-		Host_Error("LoadEmbeddedMiptex: '%s' textures lump too small to load header.\n",
-				   loadmodel->name);
+		ref.dllFuncs.R_InitSkyClouds( mipTex, texture, usesCustomPalette ); // load quake sky
+
+		if( R_GetBuiltinTexture( REF_SOLIDSKY_TEXTURE ) && R_GetBuiltinTexture( REF_ALPHASKY_TEXTURE ))
+			SetBits( world.flags, FWORLD_SKYSPHERE );
+
+		// No texture to load in this case, so just exit.
+		return;
 	}
 
-	miptex = (const mip_t*)(base + offset);
+	// Texture loading order:
+	// 1. From WAD
+	// 2. Internal from map
 
-	if ( miptex->width < 1 || miptex->width % 16 == 0 ||
-		 miptex->height < 1 || miptex->height % 16 == 0 )
+	// Try WAD texture (force while r_wadtextures is 1)
+	if( allowWAD && (( r_wadtextures->value && bmod->wadlist.count > 0 ) || mipTex->offsets[0] <= 0) )
 	{
-		Host_Error("LoadEmbeddedMiptex: '%s' miptex '%s' has invalid dimensions %ux%u.\n",
-				   loadmodel->name,
-				   miptex->name,
-				   miptex->width,
-				   miptex->height);
-	}
+		char texpath[MAX_VA_STRING];
+		int wadIndex = Mod_FindTextureInWadList( &bmod->wadlist, mipTex->name, texpath, sizeof( texpath ));
 
-	*out = (texture_t*)Mem_Calloc(loadmodel->mempool, sizeof(texture_t));
-
-	area = miptex->width * miptex->height;
-	(*out)->width = miptex->width;
-	(*out)->height = miptex->height;
-
-	for ( uint32_t index = 0; index < 4; ++index )
-	{
-		const uint32_t pixelsRequired = area >> index;
-		qboolean custom_palette = false;
-
-		// Our offset should never be behind the main offset (because that would be in the lump header).
-		if ( miptex->offsets[index] < offset )
+		if( wadIndex >= 0 )
 		{
-			Host_Error("LoadEmbeddedMiptex: '%s' miptex '%s' has invalid offset for miplevel %u.\n",
-					   loadmodel->name,
-					   miptex->name,
-					   index);
-		}
-
-		if ( miptex->offsets[index] + pixelsRequired > totalSize )
-		{
-			Host_Error("LoadEmbeddedMiptex: '%s' miptex '%s' miplevel %u offset does not leave enough space for data.\n",
-					   loadmodel->name,
-					   miptex->name,
-					   index);
+			texture->gl_texturenum = ref.dllFuncs.GL_LoadTexture( texpath, NULL, 0, txFlags );
+			bmod->wadlist.wadusage[wadIndex]++;
 		}
 	}
 
-	LoadTexture(bmod, offsets, index, false);
+	// WAD failed, so use internal texture (if present)
+	if( mipTex->offsets[0] > 0 && texture->gl_texturenum == 0 )
+	{
+		char texName[64];
+		const size_t size = Mod_CalculateMipTexSize( mipTex, usesCustomPalette );
+
+		Q_snprintf( texName, sizeof( texName ), "#%s:%s.mip", loadstat.name, mipTex->name );
+		texture->gl_texturenum = ref.dllFuncs.GL_LoadTexture( texName, (byte *)mipTex, size, txFlags );
+	}
+
+	// If texture is completely missed:
+	if( texture->gl_texturenum == 0 )
+	{
+		Con_DPrintf( S_ERROR "Unable to find %s.mip\n", mipTex->name );
+		texture->gl_texturenum = R_GetBuiltinTexture( REF_DEFAULT_TEXTURE );
+	}
+
+	// Check for luma texture
+	if( allowWAD && FBitSet( REF_GET_PARM( PARM_TEX_FLAGS, texture->gl_texturenum ), TF_HAS_LUMA ))
+	{
+		char texName[64];
+		Q_snprintf( texName, sizeof( texName ), "#%s:%s_luma.mip", loadstat.name, mipTex->name );
+
+		if( mipTex->offsets[0] > 0 )
+		{
+			const size_t size = Mod_CalculateMipTexSize( mipTex, usesCustomPalette );
+			texture->fb_texturenum = ref.dllFuncs.GL_LoadTexture( texName, (byte *)mipTex, size, TF_MAKELUMA );
+		}
+		else
+		{
+			char texpath[MAX_VA_STRING];
+			int wadIndex;
+			fs_offset_t srcSize = 0;
+			byte* src = NULL;
+
+			// NOTE: We can't load the _luma texture from the WAD as normal because it
+			// doesn't exist there. The original texture is already loaded, but cannot be modified.
+			// Instead, load the original texture again and convert it to luma.
+
+			wadIndex = Mod_FindTextureInWadList( &bmod->wadlist, texture->name, texpath, sizeof( texpath ));
+
+			if( wadIndex >= 0 )
+			{
+				src = FS_LoadFile( texpath, &srcSize, false );
+				bmod->wadlist.wadusage[wadIndex]++;
+			}
+
+			// OK, loading it from wad or hi-res version
+			texture->fb_texturenum = ref.dllFuncs.GL_LoadTexture( texName, src, srcSize, TF_MAKELUMA );
+
+			if( src )
+				Mem_Free( src );
+		}
+	}
+#endif // !XASH_DEDICATED
+}
+
+static void Mod_LoadTexture( dbspmodel_t *bmod, int textureIndex, qboolean allowWAD )
+{
+	texture_t *texture;
+	mip_t *mipTex;
+
+	if( textureIndex < 0 || textureIndex >= loadmodel->numtextures )
+		return;
+
+	mipTex = Mod_GetMipTexForTexture( bmod, textureIndex );
+
+	if( !mipTex )
+	{
+		// No data for this texture.
+		// Create default texture (some mods require this).
+		Mod_CreateDefaultTexture( &loadmodel->textures[textureIndex] );
+		return;
+	}
+
+	if( mipTex->name[0] == '\0' )
+		Q_snprintf( mipTex->name, sizeof( mipTex->name ), "miptex_%i", textureIndex );
+
+	texture = (texture_t *)Mem_Calloc( loadmodel->mempool, sizeof( *texture ));
+	loadmodel->textures[textureIndex] = texture;
+
+	// Ensure texture name is lowercase.
+	Q_strncpy( texture->name, mipTex->name, sizeof( texture->name ));
+	Q_strnlwr( texture->name, texture->name, sizeof( texture->name ));
+
+	texture->width = mipTex->width;
+	texture->height = mipTex->height;
+
+	Mod_LoadTextureData( bmod, textureIndex, allowWAD );
+}
+
+static void Mod_LoadAllTextures( dbspmodel_t *bmod )
+{
+	int i;
+
+	for( i = 0; i < loadmodel->numtextures; i++ )
+		Mod_LoadTexture( bmod, i, true );
 }
 
 static void LoadAfterburnerBSPTextures(dbspmodel_t* bmod)
@@ -2550,6 +2455,7 @@ static void LoadAfterburnerBSPTextures(dbspmodel_t* bmod)
 
 	if ( bmod->texdatasize < sizeof(dtexturelumpheader_t) )
 	{
+		// TODO: Non-fatal error
 		Host_Error("LoadAfterburnerBSPTextures: '%s' textures lump too small, expected at least %u bytes.\n",
 				   loadmodel->name,
 				   (uint32_t)sizeof(dtexturelumpheader_t));
@@ -2572,7 +2478,8 @@ static void LoadAfterburnerBSPTextures(dbspmodel_t* bmod)
 
 	if ( bmod->texdatasize < bytesProcessed + (texHeader->pngCount * sizeof(dpngtexturepath_t)) )
 	{
-		Host_Error("LoadAfterburnerBSPTextures: '%s' textures lump too small to read PNG textures, expected at least %u bytes\n",
+		// TODO: Non-fatal error
+		Host_Error("LoadAfterburnerBSPTextures: '%s' textures lump too small to read PNG textures, expected at least %zu bytes\n",
 				   loadmodel->name,
 				   sizeof(dtexturelumpheader_t) + (texHeader->pngCount * sizeof(dpngtexturepath_t)));
 	}
@@ -2602,43 +2509,16 @@ static void LoadAfterburnerBSPTextures(dbspmodel_t* bmod)
 
 		if ( *currentMiptex < 0 || *currentMiptex >= bmod->texdatasize )
 		{
-			CreateDefaultTexture(texture);
+			Mod_CreateDefaultTexture(texture);
 			continue;
 		}
 		else
 		{
-			LoadEmbeddedMiptex(bmod,
-							   miptexOffsets,
-							   index,
-							   texture);
+			Mod_LoadTexture(bmod, index, false);
 		}
 	}
 
-	SequenceAnimatedTextures(texHeader->pngCount);
-}
-
-static void LoadStandardBSPTextures(dbspmodel_t* bmod)
-{
-	dmiptexlump_t	*in;
-	int i;
-
-	in = bmod->textures;
-	loadmodel->textures = (texture_t **)Mem_Calloc( loadmodel->mempool, in->nummiptex * sizeof( texture_t* ));
-	loadmodel->numtextures = in->nummiptex;
-
-	for( i = 0; i < loadmodel->numtextures; i++ )
-	{
-		if( in->dataofs[i] == -1 )
-		{
-			// create default texture (some mods requires this)
-			CreateDefaultTexture(&loadmodel->textures[i]);
-			continue; // missed
-		}
-
-		LoadTexture(bmod, in->dataofs, i, true);
-	}
-
-	SequenceAnimatedTextures(0);
+	Mod_SequenceAllAnimatedTextures(texHeader->pngCount);
 }
 
 /*
@@ -2648,24 +2528,28 @@ Mod_LoadTextures
 */
 static void Mod_LoadTextures( dbspmodel_t *bmod )
 {
-	if( bmod->isworld )
-	{
-#if !XASH_DEDICATED
-		// release old sky layers first
-		if( !Host_IsDedicated() )
-		{
-			ref.dllFuncs.GL_FreeTexture( R_GetBuiltinTexture( REF_ALPHASKY_TEXTURE ));
-			ref.dllFuncs.GL_FreeTexture( R_GetBuiltinTexture( REF_SOLIDSKY_TEXTURE ));
-		}
-#endif // XASH_DEDICATED
-	}
+	dmiptexlump_t *lump;
 
-	if( !bmod->texdatasize )
+#if !XASH_DEDICATED
+	// release old sky layers first
+	if( !Host_IsDedicated() && bmod->isworld )
+	{
+		ref.dllFuncs.GL_FreeTexture( R_GetBuiltinTexture( REF_ALPHASKY_TEXTURE ));
+		ref.dllFuncs.GL_FreeTexture( R_GetBuiltinTexture( REF_SOLIDSKY_TEXTURE ));
+	}
+#endif
+
+	lump = bmod->textures;
+
+	if( bmod->texdatasize < 1 || !lump || lump->nummiptex < 1 )
 	{
 		// no textures
 		loadmodel->textures = NULL;
 		return;
 	}
+
+	loadmodel->textures = (texture_t **)Mem_Calloc( loadmodel->mempool, lump->nummiptex * sizeof( texture_t * ));
+	loadmodel->numtextures = lump->nummiptex;
 
 	if ( bmod->version == ABBSP_VERSION )
 	{
@@ -2673,7 +2557,8 @@ static void Mod_LoadTextures( dbspmodel_t *bmod )
 	}
 	else
 	{
-		LoadStandardBSPTextures(bmod);
+		Mod_LoadAllTextures( bmod );
+		Mod_SequenceAllAnimatedTextures(0);
 	}
 }
 

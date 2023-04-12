@@ -165,7 +165,7 @@ def build(bld):
 	sources = bld.path.parent.parent.ant_glob("game_menu_shared/**/*.cpp") + \
 			  bld.path.parent.ant_glob(SOURCES)
 
-	installPath = os.path.join(bld.env.PREFIX, bld.env.GAMEDIR, bld.env.CLIENT_DIR)
+	installPath = os.path.join(bld.env.PREFIX, "lib", "xash3d", bld.env.GAMEDIR, bld.env.CLIENT_DIR)
 
 	task = bld.shlib(
 		source   = sources,
