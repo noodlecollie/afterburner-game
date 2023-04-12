@@ -333,7 +333,7 @@ static void WriteBodyGroupInfo( FILE *fp )
 
 			COM_FileBase( model->name, modelname );
 
-			fprintf( fp, "$body \"%s\" \"%s\"\n\n", bodypart->name, model->name );
+			fprintf( fp, "$body \"%s\" \"%s\"\n\n", bodypart->name, modelname );
 			continue;
 		}
 
