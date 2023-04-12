@@ -14,6 +14,6 @@ def configure(conf):
 	return
 
 def build(bld):
-	bld.install_files("${PREFIX}",
+	bld.install_files("${PREFIX}/lib/xash3d",
 					  bld.path.ant_glob("afterburner/**/*.*", excl=["**/git-track-me"]),
 					  relative_trick=True)
